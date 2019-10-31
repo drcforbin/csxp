@@ -20,11 +20,9 @@ executable(
         'main.cpp',
         #'env.cpp',
         'integration.cpp',
-        'parser.cpp',
         'map.cpp',
         '../test/test-data.cpp',
         'reader.cpp',
-        'tokenizer.cpp',
         common_sources
     ],
     include_directories: inc

@@ -4,9 +4,7 @@
 #include "fmt/format.h"
 #include "lib/lib.h"
 #include "logging.h"
-#include "parser.h"
 #include "reader.h"
-#include "tokenizer.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -165,16 +163,14 @@ int main(int argc, char* argv[])
 
                 register_rwte(env.get());
 
-                auto r = createReader2(str, exe_path);
-
                 atom::patom res = atom::Nil;
-                while (r->next()) {
-                    res = env->eval(r->value());
+                for (auto val : reader(str, exe_path)) {
+                    res = env->eval(val);
                 }
             } catch (const EnvError& e) {
                 LOGGER()->error("env error: {}", e.what());
-            } catch (const ParserError& e) {
-                LOGGER()->error("parser error: {}", e.what());
+            } catch (const ReaderError& e) {
+                LOGGER()->error("reader error: {}", e.what());
             } catch (const std::runtime_error& e) {
                 LOGGER()->error("unknown error: {}", e.what());
             }
@@ -199,17 +195,14 @@ int main(int argc, char* argv[])
                 //lib::addCore(env.get());
                 //lib::addMath(env.get());
 
-                auto r = createReader(str, test_path);
-
-                while (r->next()) {
-                    auto val = r->value();
+                for (auto val : reader(str, exe_path)) {
                     fmt::print("{}\n", *val);
                     dump(val);
                 }
             } catch (const EnvError& e) {
                 LOGGER()->error("env error: {}", e.what());
-            } catch (const ParserError& e) {
-                LOGGER()->error("parser error: {}", e.what());
+            } catch (const ReaderError& e) {
+                LOGGER()->error("reader error: {}", e.what());
             } catch (const std::runtime_error& e) {
                 LOGGER()->error("unknown error: {}", e.what());
             }

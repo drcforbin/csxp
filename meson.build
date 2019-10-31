@@ -19,9 +19,7 @@ common_sources = files(
     'src/lib/detail-op.cpp',
     'src/lib/lib.cpp',
     'src/logging.cpp',
-    'src/parser.cpp',
-    'src/reader.cpp',
-    'src/tokenizer.cpp',
+    'src/reader.cpp'
 )
 
 

@@ -1,7 +1,5 @@
 #include "atom-fmt.h"
-#include "parser.h"
 #include "reader.h"
-#include "tokenizer.h"
 
 #include <charconv>
 
@@ -150,13 +148,13 @@ constexpr int to_digit(char ch)
 
 [[noreturn]] void throwError(Position pos, const char* msg)
 {
-    throw std::runtime_error(fmt::format("({}:{}) reader error: {}",
+    throw ReaderError(fmt::format("({}:{}) reader error: {}",
             pos.line, pos.name, msg));
 }
 
 [[noreturn]] void throwError(Position pos, const std::string& msg)
 {
-    throw std::runtime_error(fmt::format("({}:{}) reader error: {}",
+    throw ReaderError(fmt::format("({}:{}) reader error: {}",
             pos.line, pos.name, msg));
 }
 
@@ -205,9 +203,9 @@ static atom::patom quoteAtom(atom::patom val)
             val});
 }
 
-struct Handler2
+struct Handler
 {
-    Handler2(std::string_view src, std::string_view name) :
+    Handler(std::string_view src, std::string_view name) :
         src(src),
         m_pos{0, name}
     {
@@ -953,7 +951,7 @@ struct Handler2
     bool m_quoteNext = false;
 };
 
-atom::patom Handler2::findAtom()
+atom::patom Handler::findAtom()
 {
     atom::patom value;
 
@@ -1018,28 +1016,6 @@ class ReaderImpl : public Reader
 public:
     ReaderImpl(std::string_view str,
             std::string_view name) :
-        m_p(createParser(createTokenizer(str, "internal-test")))
-    {}
-
-    bool next()
-    {
-        return m_p->next();
-    }
-
-    atom::patom value()
-    {
-        return m_p->value();
-    }
-
-private:
-    std::shared_ptr<Parser> m_p;
-};
-
-class ReaderImpl2 : public Reader
-{
-public:
-    ReaderImpl2(std::string_view str,
-            std::string_view name) :
         handler(str, name)
     {
         m_value = handler.findAtom();
@@ -1062,7 +1038,7 @@ public:
     }
 
 private:
-    Handler2 handler;
+    Handler handler;
     bool first = true;
     atom::patom m_value;
 };
@@ -1071,11 +1047,4 @@ std::shared_ptr<Reader> createReader(std::string_view str,
         std::string_view name)
 {
     return std::make_shared<ReaderImpl>(str, name);
-}
-
-// todo: hack
-std::shared_ptr<Reader> createReader2(std::string_view str,
-        std::string_view name)
-{
-    return std::make_shared<ReaderImpl2>(str, name);
 }

@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "reader.h"
-#include "tokenizer.h"
 
 #include <string_view>
 
@@ -13,7 +12,9 @@ using namespace std::literals;
 
 atom::patom testReadToAtom(std::string_view str)
 {
-    auto r = createReader2(str, "test-file"sv);
+    // todo: switch to 'reader'?
+
+    auto r = createReader(str, "test-file"sv);
 
     // should be able to get first atom
     REQUIRE(r->next());
@@ -28,11 +29,9 @@ atom::patom testReadToAtom(std::string_view str)
 
 std::vector<atom::patom> testReadToAtoms(std::string_view str)
 {
-    auto r = createReader2(str, "test-file"sv);
-
     std::vector<atom::patom> vec;
-    while (r->next()) {
-        vec.push_back(r->value());
+    for (auto val : reader(str, "test-file"sv)) {
+        vec.push_back(val);
     }
 
     return vec;
@@ -49,6 +48,20 @@ TEST_CASE("can read keyword", "[reader]")
     auto k = std::get<std::shared_ptr<atom::Keyword>>(val->p);
     REQUIRE(k); // make sure not null or anything
     REQUIRE(k->name == ":keyword"sv);
+
+    /*
+    todo: test
+        none,
+        lbracket,
+        rbracket,
+        lcurly,
+        rcurly,
+        sym,
+        str,
+        chr,
+        nil,
+        quote
+	*/
 }
 
 TEST_CASE("can read list", "[reader]")

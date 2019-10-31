@@ -55,20 +55,9 @@ void bench_read_run(ankerl::nanobench::Config& cfg)
 {
     {
         std::vector<atom::patom> atoms;
-        cfg.minEpochIterations(105).run("read logic blob 1 (no run)", [&] {
-                                       auto r = createReader(str, "internal-test");
-                                       while (r->next()) {
-                                           atoms.emplace_back(r->value());
-                                       }
-                                   })
-                .doNotOptimizeAway(&atoms);
-    }
-    {
-        std::vector<atom::patom> atoms;
-        cfg.minEpochIterations(105).run("read logic blob 2 (no run)", [&] {
-                                       auto r = createReader2(str, "internal-test");
-                                       while (r->next()) {
-                                           atoms.emplace_back(r->value());
+        cfg.minEpochIterations(105).run("read logic blob (no run)", [&] {
+                                       for (auto val : reader(str, "internal-test"sv)) {
+                                           atoms.emplace_back(val);
                                        }
                                    })
                 .doNotOptimizeAway(&atoms);
@@ -81,18 +70,16 @@ void bench_read_run(ankerl::nanobench::Config& cfg)
                                        lib::addCore(env.get());
                                        lib::addMath(env.get());
 
-                                       auto r = createReader2(str, "internal-test");
-                                       while (r->next()) {
-                                           res = env->eval(r->value());
+                                       for (auto val : reader(str, "internal-test"sv)) {
+                                           res = env->eval(val);
                                        }
                                    })
                 .doNotOptimizeAway(&res);
     }
     {
         std::vector<atom::patom> atoms;
-        auto r = createReader2(str, "internal-test");
-        while (r->next()) {
-            atoms.emplace_back(r->value());
+        for (auto val : reader(str, "internal-test"sv)) {
+            atoms.emplace_back(val);
         }
 
         auto env = createEnv();

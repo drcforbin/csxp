@@ -2,9 +2,8 @@
 #include "catch.hpp"
 #include "env.h"
 #include "lib/lib.h"
-#include "parser.h"
 #include "run-helpers.h"
-#include "tokenizer.h"
+#include "reader.h"
 
 atom::patom runString(std::string_view str)
 {
@@ -13,12 +12,9 @@ atom::patom runString(std::string_view str)
     lib::addCore(env.get());
     lib::addMath(env.get());
 
-    auto tz = createTokenizer(str, "internal-test");
-    auto p = createParser(tz);
-
     atom::patom res = atom::Nil;
-    while (p->next()) {
-        res = env->eval(p->value());
+    for (auto val : reader(str, "internal-test")) {
+        res = val;
     }
 
     return res;

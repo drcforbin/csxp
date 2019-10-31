@@ -20,14 +20,12 @@ testexe = executable(
         'main.cpp',
         'env.cpp',
         'integration.cpp',
-        'parser.cpp',
         'map.cpp',
         'lib-math.cpp',
         'lib-op.cpp',
         'run-helpers.cpp',
         'test-data.cpp',
         'reader.cpp',
-        'tokenizer.cpp',
         common_sources
     ],
     include_directories: inc
