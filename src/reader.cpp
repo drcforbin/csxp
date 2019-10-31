@@ -2,6 +2,7 @@
 #include "reader.h"
 
 #include <charconv>
+#include <stack>
 
 using namespace std::literals;
 
@@ -73,6 +74,8 @@ using namespace std::literals;
 // - destructuring
 //
 // & - rest
+
+const atom::patom Quote = atom::SymName::make_atom("quote"sv);
 
 constexpr bool is_word(char ch)
 {
@@ -146,13 +149,13 @@ constexpr int to_digit(char ch)
     return -1;
 }
 
-[[noreturn]] void throwError(Position pos, const char* msg)
+[[noreturn]] static void throwError(Position pos, const char* msg)
 {
     throw ReaderError(fmt::format("({}:{}) reader error: {}",
             pos.line, pos.name, msg));
 }
 
-[[noreturn]] void throwError(Position pos, const std::string& msg)
+[[noreturn]] static void throwError(Position pos, const std::string& msg)
 {
     throw ReaderError(fmt::format("({}:{}) reader error: {}",
             pos.line, pos.name, msg));
@@ -184,9 +187,9 @@ struct ReaderFrame
                             throwError(pos, "push to unexpected seq type");
                         }
                     } else {
-                        // seq is expected frame to contain seq, but
-                        // we'll ignore if if not (may want to log or throw
-                        // at runtime)
+                        // seq is expected frame to contain seq
+                        assert(false);
+                        throwError(pos, "push to unexpected stack type");
                     }
                 },
                 seq->p);
@@ -198,16 +201,14 @@ struct ReaderFrame
 
 static atom::patom quoteAtom(atom::patom val)
 {
-    // todo: can partially centralize quote, like Nil, at least here
-    return atom::List::make_atom({atom::SymName::make_atom("quote"sv),
-            val});
+    return atom::List::make_atom({Quote, val});
 }
 
 struct Handler
 {
     Handler(std::string_view src, std::string_view name) :
         src(src),
-        m_pos{0, name}
+        m_pos{0, std::string(name)}
     {
     }
 
@@ -260,6 +261,78 @@ struct Handler
         ::throwError(m_pos, msg);
     }
 
+    template <typename Atom>
+    atom::patom makeAtom(std::string_view str) {
+        // no explicit specialization in non-namespace scope? hah.
+        if constexpr (std::is_same_v<Atom, atom::SymName>) {
+            if (str == "nil"sv) {
+                return push_atom(atom::Nil);
+            } else {
+                return push_atom(atom::SymName::make_atom(str));
+            }
+        } else if constexpr (std::is_same_v<Atom, atom::Char>) {
+            // we know it's a slash + whatever text, min 2 chars
+            if (str.size() == 1) {
+                return push_atom(atom::Char::make_atom(str.front()));
+            } else if (str.size() == 4 && str.front() == 'o') {
+                int base = 8;
+
+                int i = 0;
+                auto [p, _] = std::from_chars(
+                        str.data() + 1, str.data() + str.size(), i, base);
+                if (p != str.data()) {
+                    return push_atom(atom::Char::make_atom(static_cast<char32_t>(i)));
+                } else {
+                    throwError("unable to parse octal char");
+                }
+            } else if (str.size() == 5 && str.front() == 'u') {
+                int base = 16;
+
+                int i = 0;
+                auto [p, _] = std::from_chars(
+                        str.data() + 1, str.data() + str.size(), i, base);
+                if (p != str.data()) {
+                    return push_atom(atom::Char::make_atom(static_cast<char32_t>(i)));
+                } else {
+                    throwError("unable to parse unicode char");
+                }
+            } else {
+                throwError("unexpected character size");
+            }
+        } else if constexpr (std::is_same_v<Atom, atom::Num>) {
+            // note: only handling base 10 and 16
+            int base = 10;
+            std::size_t off = 0;
+            if (str.size() > 2) {
+                // todo: in c++20, starts_with
+                auto prefix = str.substr(0, 2);
+                if (prefix == "0x"sv || prefix == "0X"sv) {
+                    base = 16;
+                    off = 2;
+                }
+            }
+            int i = 0;
+            auto [p, _] = std::from_chars(
+                    str.data() + off, str.data() + str.size(), i, base);
+            if (p != str.data()) {
+                return push_atom(atom::Num::make_atom(i));
+            } else {
+                throwError(
+                        fmt::format(
+                                "invalid numeric format for '{}'", str));
+            }
+        } else {
+            return push_atom(Atom::make_atom(str));
+        }
+    }
+
+    template <typename Atom>
+    atom::patom makeAtom() {
+        auto str = makeAtom<Atom>({build.data(), build.size()});
+        build.clear();
+        return str;
+    }
+
     StateAtom handle(Normal&& state, char ch)
     {
         atom::patom res;
@@ -292,7 +365,7 @@ struct Handler
                 // whitespace. emit anything we've accumulated
                 // and just ignore this char
                 if (!build.empty()) {
-                    res = emit(Tk::sym);
+                    res = makeAtom<atom::SymName>();
                 }
                 break;
 
@@ -304,35 +377,35 @@ struct Handler
                 if (peek_next() == '@') {
                     build.push_back(get_next());
                 }
-                return {state, emit(Tk::sym)};
+                return {state, makeAtom<atom::SymName>()};
 
             // brackets, curly brackets, and parens are all tokens,
             // as well as separators. emit any symbol we might have,
             // and emit the token next round
             case '[':
-                m_stack.emplace_back(atom::Vec::make_atom());
+                m_stack.emplace(atom::Vec::make_atom());
                 break;
             case ']':
-                res = sep_emit(ch, Tk::rbracket);
+                res = emit_end_frame(ch);
                 break;
 
             case '{':
-                m_stack.emplace_back(atom::Map::make_atom());
+                m_stack.emplace(atom::Map::make_atom());
                 break;
             case '}':
-                res = sep_emit(ch, Tk::rcurly);
+                res = emit_end_frame(ch);
                 break;
 
             case '(':
-                m_stack.emplace_back(atom::List::make_atom());
+                m_stack.emplace(atom::List::make_atom());
                 break;
             case ')':
-                res = sep_emit(ch, Tk::rparen);
+                res = emit_end_frame(ch);
                 break;
 
-            // quote is a token and a symbol.
+            // quote is a separator and a special symbol.
             case '\'':
-                res = sep_emit(ch, Tk::quote);
+                res = emit_quote(ch);
                 break;
 
             // backtick is a separator, so we may need
@@ -351,7 +424,8 @@ struct Handler
             case '&':
                 assert(build.empty());
                 build.push_back(ch);
-                return {state, emit(Tk::sym)};
+                res = makeAtom<atom::SymName>();
+                break;
 
             // dash may be in a symbol, or lead a number.
             case '-':
@@ -437,7 +511,7 @@ struct Handler
             if (!nextch || is_sep(*nextch)) {
                 // no more chars, or followed by a sep. emit.
                 build.push_back(ch);
-                return {Normal{}, emit(Tk::chr)};
+                return {Normal{}, makeAtom<atom::Char>()};
             }
 
             // otherwise, see if it's unicode or octal
@@ -464,7 +538,7 @@ struct Handler
                     throwError("invalid unicode character");
                 }
                 build.push_back(ch);
-                return {Normal{}, emit(Tk::chr)};
+                return {Normal{}, makeAtom<atom::Char>()};
             }
 
             if (ch == 'o') { // octal value?
@@ -485,7 +559,7 @@ struct Handler
                     throwError("invalid unicode character");
                 }
                 build.push_back(ch);
-                return {Normal{}, emit(Tk::chr)};
+                return {Normal{}, makeAtom<atom::Char>()};
             }
 
             // if none of those, then we should see
@@ -542,21 +616,17 @@ struct Handler
             }
 
             build.push_back(result);
-            return {Normal{}, emit(Tk::chr)};
+            return {Normal{}, makeAtom<atom::Char>()};
         } catch (std::out_of_range&) {
             throwError("unsupported character");
         }
-
-        // really, should never get here
-        assert(false);
-        return {state, {}};
     }
 
     StateAtom handle(String&& state, char ch)
     {
         if (ch == '"') {
             // end of string
-            return {Normal{}, emit(Tk::str)};
+            return {Normal{}, makeAtom<atom::Str>()};
         } else if (ch == '\\') {
             // todo: do we want to actually eval the
             // escaped character?
@@ -608,7 +678,7 @@ struct Handler
         } else if (build.size() > 1) {
             // we're done here.
             unget_next(ch);
-            return {Normal{}, emit(Tk::keyword)};
+            return {Normal{}, makeAtom<atom::Keyword>()};
         } else {
             // can't end a keyword with just a colon
             throwError("invalid keyword");
@@ -623,7 +693,7 @@ struct Handler
             build.push_back(ch);
         } else if (!build.empty()) {
             unget_next(ch);
-            return {Normal{}, emit(Tk::keyword)};
+            return {Normal{}, makeAtom<atom::Keyword>()};
         } else {
             throwError("invalid keyword");
         }
@@ -655,7 +725,7 @@ struct Handler
             return {IntegerNumber{state}, {}};
         } else if (is_sep(ch)) {
             unget_next(ch);
-            return {Normal{}, emit(Tk::num)};
+            return {Normal{}, makeAtom<atom::Num>()};
         } else {
             throwError("invalid number");
         }
@@ -689,7 +759,7 @@ struct Handler
             }
         } else if (is_sep(ch)) {
             unget_next(ch);
-            return {Normal{}, emit(Tk::num)};
+            return {Normal{}, makeAtom<atom::Num>()};
         } else {
             throwError("invalid integer");
         }
@@ -737,27 +807,13 @@ struct Handler
         return std::nullopt;
     }
 
-    // emit a single token
-    [[nodiscard]] atom::patom emit(Tk t)
-    {
-        Token tk{t, std::string(build.data(), build.size())};
-        build.clear();
-
-        // cheating?
-        if (tk.s == "nil"sv) {
-            tk.t = Tk::nil;
-        }
-
-        return handleToken(tk);
-    }
-
     // emit a symbol if one has accumulated
     [[nodiscard]] atom::patom sep_emit(char ch)
     {
         // this is called for any separator char
         // to emit any accumulated symbol
         if (!build.empty()) {
-            if (auto atom = emit(Tk::sym); atom) {
+            if (auto atom = makeAtom<atom::SymName>(); atom) {
                 unget_next(ch);
                 return atom;
             }
@@ -765,39 +821,88 @@ struct Handler
         return {};
     }
 
-    // emit a symbol if one has accumulated, or emit a
-    // token if not (this can be called twice, to flush
+    // emit a symbol if one has accumulated, or ends the frame
+    // if not (this can be called twice, to flush
     // then emit some single char token)
-    [[nodiscard]] atom::patom sep_emit(char ch, Tk t)
+    [[nodiscard]] atom::patom emit_end_frame(char ch)
     {
         if (auto atom = sep_emit(ch); atom) {
             return atom;
         } else {
-            build.push_back(ch);
-            return emit(t);
-        }
-    }
+            build.clear();
 
-    ReaderFrame* topFrame()
-    {
-        if (!m_stack.empty()) {
-            return &m_stack.back();
-        }
+            // TODO: error on map with leftover keys!
 
-        return nullptr;
-    }
+            if (m_stack.size() == 1) {
+                auto& frame = m_stack.top();
+                auto seq = frame.seq;
+                if (m_quoteNext) {
+                    seq = quoteAtom(seq);
+                    m_quoteNext = false;
+                } else if (frame.quoteNext) {
+                    throwError("unexpected quote");
+                }
 
-    atom::patom pushAtom(atom::patom atom)
-    {
-        auto frame = topFrame();
-        if (frame) {
-            // wrap in quote if needed
-            if (frame->quoteNext) {
-                atom = quoteAtom(atom);
-                frame->quoteNext = false;
+                // there should be nothing on the
+                // stack, we're returning the accumulated
+                // sequence or item
+                m_stack.pop();
+
+                return seq;
+            } else if (m_stack.size() > 1) {
+                // get the top sequence and pop it off
+                auto seq = m_stack.top().seq;
+                m_stack.pop();
+
+                // prefix quote if needed, and push the
+                // accumulated sequence or item to the
+                // next stack level
+                auto& frame = m_stack.top();
+                if (frame.quoteNext) {
+                    seq = quoteAtom(seq);
+                    frame.quoteNext = false;
+                }
+
+                frame.push(m_pos, seq);
+            } else {
+                throwError("unhandled empty stack on frame end");
             }
 
-            frame->push(m_pos, atom);
+            return {};
+        }
+    }
+
+    // emit a quote if one has accumulated, or emit a
+    // token if not (this can be called twice, to flush
+    // then emit some single char token)
+    [[nodiscard]] atom::patom emit_quote(char ch)
+    {
+        if (auto atom = sep_emit(ch); atom) {
+            return atom;
+        } else {
+            build.clear();
+
+            if (!m_stack.empty()) {
+                m_stack.top().quoteNext = true;
+            } else {
+                m_quoteNext = true;
+            }
+            return {};
+        }
+    }
+
+    atom::patom push_atom(atom::patom atom)
+    {
+        if (!m_stack.empty()) {
+            // quote if needed, and add it to the
+            // accumulating sequence or item
+            auto& frame = m_stack.top();
+            if (frame.quoteNext) {
+                atom = quoteAtom(atom);
+                frame.quoteNext = false;
+            }
+
+            frame.push(m_pos, atom);
             return {};
         } else {
             if (m_quoteNext) {
@@ -809,136 +914,6 @@ struct Handler
         }
     }
 
-    atom::patom endFrame()
-    {
-        // TODO: error on map with leftover keys!
-
-        switch (m_stack.size()) {
-            case 0:
-                throwError("unhandled empty stack on frame end");
-            case 1: {
-                auto frame = topFrame();
-                auto seq = frame->seq;
-                if (m_quoteNext) {
-                    seq = quoteAtom(seq);
-                    m_quoteNext = false;
-                } else if (frame->quoteNext) {
-                    throwError("unexpected quote");
-                }
-
-                // clear stack
-                m_stack.clear();
-                return seq;
-            }
-            default: // > 1
-            {
-                auto frame = topFrame();
-                auto seq = frame->seq;
-
-                // pop it
-                m_stack.pop_back();
-
-                frame = topFrame();
-                // prefix quote if needed
-                if (frame->quoteNext) {
-                    seq = quoteAtom(seq);
-                    frame->quoteNext = false;
-                }
-
-                frame->push(m_pos, seq);
-            }
-        }
-
-        return {};
-    }
-
-    atom::patom handleToken(Token t)
-    {
-        switch (t.t) {
-            case Tk::rparen:
-                [[fallthrough]];
-            case Tk::rbracket:
-                [[fallthrough]];
-            case Tk::rcurly:
-                return endFrame();
-            case Tk::sym:
-                return pushAtom(atom::SymName::make_atom(t.s));
-            case Tk::str:
-                return pushAtom(atom::Str::make_atom(t.s));
-            case Tk::keyword:
-                return pushAtom(atom::Keyword::make_atom(t.s));
-            case Tk::chr:
-                // we know it's a slash + whatever text, min 2 chars
-                if (t.s.size() == 1) {
-                    return pushAtom(atom::Char::make_atom(t.s.front()));
-                } else if (t.s.size() == 4 && t.s.front() == 'o') {
-                    int base = 8;
-
-                    int i = 0;
-                    auto [p, _] = std::from_chars(
-                            t.s.data() + 1, t.s.data() + t.s.size(), i, base);
-                    if (p != t.s.data()) {
-                        return pushAtom(atom::Char::make_atom(static_cast<char32_t>(i)));
-                    } else {
-                        throwError("unable to parse octal char");
-                    }
-                } else if (t.s.size() == 5 && t.s.front() == 'u') {
-                    int base = 16;
-
-                    int i = 0;
-                    auto [p, _] = std::from_chars(
-                            t.s.data() + 1, t.s.data() + t.s.size(), i, base);
-                    if (p != t.s.data()) {
-                        return pushAtom(atom::Char::make_atom(static_cast<char32_t>(i)));
-                    } else {
-                        throwError("unable to parse unicode char");
-                    }
-                } else {
-                    throwError("unexpected character size");
-                }
-                break;
-            case Tk::nil:
-                return pushAtom(atom::Nil);
-            case Tk::num: {
-                // note: only handling base 10 and 16
-                int base = 10;
-                std::size_t off = 0;
-                if (t.s.size() > 2) {
-                    // todo: in c++20, starts_with
-                    auto prefix = t.s.substr(0, 2);
-                    if (prefix == "0x"sv || prefix == "0X"sv) {
-                        base = 16;
-                        off = 2;
-                    }
-                }
-                int i = 0;
-                auto [p, _] = std::from_chars(
-                        t.s.data() + off, t.s.data() + t.s.size(), i, base);
-                if (p != t.s.data()) {
-                    return pushAtom(atom::Num::make_atom(i));
-                } else {
-                    throwError(
-                            fmt::format(
-                                    "invalid numeric format for '{}'", t.s));
-                }
-                break;
-            }
-            case Tk::quote: {
-                auto frame = topFrame();
-                if (frame) {
-                    frame->quoteNext = true;
-                } else {
-                    m_quoteNext = true;
-                }
-                break;
-            }
-            default:
-                throwError(fmt::format("unexpected token in read {}", t.t));
-        }
-
-        return {};
-    }
-
     std::string_view src;
     Position m_pos;
 
@@ -947,7 +922,7 @@ struct Handler
 
     State state;
 
-    std::vector<ReaderFrame> m_stack;
+    std::stack<ReaderFrame> m_stack;
     bool m_quoteNext = false;
 };
 
@@ -977,32 +952,27 @@ atom::patom Handler::findAtom()
                     build.clear();
 
                     if constexpr (std::is_same_v<T, Normal>) {
-                        // cheating?
-                        if (str == "nil"sv) {
-                            return handleToken({Tk::nil, str});
-                        } else {
-                            return handleToken({Tk::sym, str});
-                        }
+                        return makeAtom<atom::SymName>(str);
                     } else if constexpr (std::is_same_v<T, Char>) {
                         // char finishes itself or throws. if we
                         // have chars left, something bad has happened
                         assert(false);
-                        throwError("unsupported character");
+                        throwError("character could not be handled");
                     } else if constexpr (std::is_same_v<T, String>) {
-                        return handleToken({Tk::str, str});
+                        return makeAtom<atom::Str>(str);
                     } else if constexpr (std::is_same_v<T, Comment>) {
                         // we shouldn't accumulate comments
                         assert(str.empty());
-                        return handleToken({Tk::none});
+                        return {};
                     } else if constexpr (
                             std::is_same_v<T, Keyword> ||
                             std::is_same_v<T, NamespacedKeyword>) {
-                        return handleToken({Tk::keyword, str});
+                        return makeAtom<atom::Keyword>(str);
                     } else if constexpr (
                             std::is_same_v<T, Number> ||
                             std::is_same_v<T, DecimalNumber> ||
                             std::is_same_v<T, IntegerNumber>) {
-                        return handleToken({Tk::num, str});
+                        return makeAtom<atom::Num>(str);
                     }
                 },
                 state);
