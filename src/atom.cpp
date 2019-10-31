@@ -121,7 +121,8 @@ SeqIt Seq::begin()
     return ++it;
 }
 
-SeqIt Seq::end() {
+SeqIt Seq::end()
+{
     return SeqIt({});
 }
 
@@ -175,6 +176,47 @@ bool operator!=(const SymName& lhs, const SymName& rhs)
     return !(lhs == rhs);
 }
 
+struct MapIterator : public AtomIterator
+{
+public:
+    MapIterator(std::shared_ptr<const Map> s) :
+        s(s)
+    {}
+
+    bool next()
+    {
+        /* todo: map
+        int len = static_cast<int>(s->items.size());
+        if (s && !s->items.empty() && idx < len - 1) {
+            idx++;
+            return true;
+        }
+        */
+
+        return false;
+    }
+
+    patom value() const
+    {
+        /* todo: map
+        int len = static_cast<int>(s->items.size());
+        if (s && !s->items.empty() && idx < len) {
+            return s->items[idx];
+        }
+        */
+
+        return {};
+    }
+
+private:
+    std::shared_ptr<const Map> s;
+};
+
+std::shared_ptr<AtomIterator> Map::iterator() const
+{
+    return std::make_shared<MapIterator>(shared_from_this());
+}
+
 template <typename SeqT>
 struct ItemsIterator : public AtomIterator
 {
@@ -221,8 +263,7 @@ std::shared_ptr<AtomIterator> Vec::iterator() const
 
 bool is_nil(patom a)
 {
-    // todo: maybe add monostate check?
-    return !a || *a == *Nil;
+    return !a || *a == *Nil || a->p.index() == 0;
 }
 
 bool truthy(patom a)

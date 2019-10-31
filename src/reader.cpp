@@ -1,12 +1,9 @@
-#include "logging.h"
+#include "atom-fmt.h"
+#include "parser.h"
+#include "reader.h"
 #include "tokenizer.h"
 
-#include <deque>
-#include <regex>
-#include <string_view>
-#include <variant>
-
-#define LOGGER() (logging::get("tokenizer"))
+#include <charconv>
 
 using namespace std::literals;
 
@@ -87,57 +84,30 @@ constexpr bool is_word(char ch)
            ch == '_' || ch == '$';
 }
 
-// copy from reader
 constexpr bool is_sep(char ch)
 {
-    switch (ch) {
-        case ' ':
-            [[fallthrough]];
-        case '\f':
-            [[fallthrough]];
-        case '\n':
-            [[fallthrough]];
-        case '\r':
-            [[fallthrough]];
-        case '\t':
-            [[fallthrough]];
-        case '\v':
-            [[fallthrough]];
-        // todo: unicode support
-        // case 0x00a0: [[fallthrough]];
-        // case 0x1680: [[fallthrough]];
-        // case 0x2000 ... 0x200a: [[fallthrough]];
-        // case 0x2028: [[fallthrough]];
-        // case 0x2029: [[fallthrough]];
-        // case 0x202f: [[fallthrough]];
-        // case 0x205f: [[fallthrough]];
-        // case 0x3000: [[fallthrough]];
-        // case 0xfeff: [[fallthrough]];
-        case '[':
-            [[fallthrough]];
-        case ']':
-            [[fallthrough]];
-        case '{':
-            [[fallthrough]];
-        case '}':
-            [[fallthrough]];
-        case '(':
-            [[fallthrough]];
-        case ')':
-            [[fallthrough]];
-        case '\'':
-            [[fallthrough]];
-        case '"':
-            [[fallthrough]];
-        case '`':
-            [[fallthrough]];
-        case ',':
-            [[fallthrough]];
-        case ';':
-            return true;
-        default:
-            return false;
-    }
+    // todo: consider collecting stats to order these
+    // todo: unicode support
+    // 0x00a0
+    // 0x1680
+    // 0x2000 ... 0x200a
+    // 0x2028
+    // 0x2029
+    // 0x202f
+    // 0x205f
+    // 0x3000
+    // 0xfeff
+    return ch == ' ' ||
+           ch == ')' || ch == '(' ||
+           ch == ']' || ch == '[' ||
+           ch == '}' || ch == '{' ||
+           ch == '\n' || ch == '\r' ||
+           ch == '"' ||
+           ch == '\'' ||
+           ch == '\t' || ch == '\f' || ch == '\v' ||
+           ch == '`' ||
+           ch == ',' ||
+           ch == ';';
 }
 
 constexpr bool is_digit_base10(char ch)
@@ -178,15 +148,72 @@ constexpr int to_digit(char ch)
     return -1;
 }
 
-struct Handler
+[[noreturn]] void throwError(Position pos, const char* msg)
 {
-    Handler(std::string_view src, std::string_view name) :
+    throw std::runtime_error(fmt::format("({}:{}) reader error: {}",
+            pos.line, pos.name, msg));
+}
+
+[[noreturn]] void throwError(Position pos, const std::string& msg)
+{
+    throw std::runtime_error(fmt::format("({}:{}) reader error: {}",
+            pos.line, pos.name, msg));
+}
+
+struct ReaderFrame
+{
+    ReaderFrame(atom::patom seq) :
+        seq(seq)
+    {
+    }
+
+    void push(const Position& pos, atom::patom val)
+    {
+        std::visit(
+                [&pos, &val](auto&& s) {
+                    using T = std::decay_t<decltype(s)>;
+                    if constexpr (std::is_same_v<T, std::shared_ptr<atom::Seq>>) {
+                        if (auto m = std::dynamic_pointer_cast<atom::Map>(s)) {
+                            // todo: map
+                            // we want to capture a key, then value,
+                            // then push, repeat. some error handling needed too
+                            // m->items.push_back(val);
+                        } else if (auto l = std::dynamic_pointer_cast<atom::List>(s)) {
+                            l->items.push_back(val);
+                        } else if (auto v = std::dynamic_pointer_cast<atom::Vec>(s)) {
+                            v->items.push_back(val);
+                        } else {
+                            throwError(pos, "push to unexpected seq type");
+                        }
+                    } else {
+                        // seq is expected frame to contain seq, but
+                        // we'll ignore if if not (may want to log or throw
+                        // at runtime)
+                    }
+                },
+                seq->p);
+    }
+
+    atom::patom seq;
+    bool quoteNext = false;
+};
+
+static atom::patom quoteAtom(atom::patom val)
+{
+    // todo: can partially centralize quote, like Nil, at least here
+    return atom::List::make_atom({atom::SymName::make_atom("quote"sv),
+            val});
+}
+
+struct Handler2
+{
+    Handler2(std::string_view src, std::string_view name) :
         src(src),
         m_pos{0, name}
     {
     }
 
-    Token findToken();
+    atom::patom findAtom();
 
     struct Normal
     {};
@@ -223,14 +250,22 @@ struct Handler
             Keyword, NamespacedKeyword,
             Number, DecimalNumber, IntegerNumber>;
 
+    using StateAtom = std::pair<State, atom::patom>;
+
     [[noreturn]] void throwError(const char* msg)
     {
-        throw std::runtime_error(fmt::format("({}:{}) tokenizer error: {}",
-                m_pos.line, m_pos.name, msg));
+        ::throwError(m_pos, msg);
     }
 
-    State handle(Normal&& state, char ch)
+    [[noreturn]] void throwError(const std::string& msg)
     {
+        ::throwError(m_pos, msg);
+    }
+
+    StateAtom handle(Normal&& state, char ch)
+    {
+        atom::patom res;
+
         switch (ch) {
             case '\n':
                 m_pos.line++;
@@ -259,7 +294,7 @@ struct Handler
                 // whitespace. emit anything we've accumulated
                 // and just ignore this char
                 if (!build.empty()) {
-                    emit(Tk::sym);
+                    res = emit(Tk::sym);
                 }
                 break;
 
@@ -271,36 +306,35 @@ struct Handler
                 if (peek_next() == '@') {
                     build.push_back(get_next());
                 }
-                emit(Tk::sym);
-                break;
+                return {state, emit(Tk::sym)};
 
             // brackets, curly brackets, and parens are all tokens,
             // as well as separators. emit any symbol we might have,
             // and emit the token next round
             case '[':
-                sep_emit(ch, Tk::lbracket);
+                m_stack.emplace_back(atom::Vec::make_atom());
                 break;
             case ']':
-                sep_emit(ch, Tk::rbracket);
+                res = sep_emit(ch, Tk::rbracket);
                 break;
 
             case '{':
-                sep_emit(ch, Tk::lcurly);
+                m_stack.emplace_back(atom::Map::make_atom());
                 break;
             case '}':
-                sep_emit(ch, Tk::rcurly);
+                res = sep_emit(ch, Tk::rcurly);
                 break;
 
             case '(':
-                sep_emit(ch, Tk::lparen);
+                m_stack.emplace_back(atom::List::make_atom());
                 break;
             case ')':
-                sep_emit(ch, Tk::rparen);
+                res = sep_emit(ch, Tk::rparen);
                 break;
 
             // quote is a token and a symbol.
             case '\'':
-                sep_emit(ch, Tk::quote);
+                res = sep_emit(ch, Tk::quote);
                 break;
 
             // backtick is a separator, so we may need
@@ -308,7 +342,7 @@ struct Handler
             // symbol for the backtick itself. the rest
             // of the chars here just emit their symbol.
             case '`':
-                if (sep_emit(ch)) {
+                if (res = sep_emit(ch); res) {
                     break;
                 }
                 [[fallthrough]];
@@ -319,8 +353,7 @@ struct Handler
             case '&':
                 assert(build.empty());
                 build.push_back(ch);
-                emit(Tk::sym);
-                break;
+                return {state, emit(Tk::sym)};
 
             // dash may be in a symbol, or lead a number.
             case '-':
@@ -330,7 +363,7 @@ struct Handler
                                                 is_digit_base10(*ch2)) {
                         // no unget here, just need to set neg flag
                         // todo: move to number ctor that accepts a ch?
-                        return Number{.neg = true};
+                        return {Number{.neg = true}, {}};
                     }
                 }
                 break;
@@ -342,7 +375,7 @@ struct Handler
                     // character into account as the lead digit
                     // todo: move to number ctor that accepts a ch?
                     unget_next(ch);
-                    return Number{};
+                    return {Number{}, {}};
                 } else {
                     build.push_back(ch);
                 }
@@ -350,15 +383,15 @@ struct Handler
 
             // double quote is a separator and begins a string
             case '"':
-                if (!sep_emit(ch)) {
-                    return String{};
+                if (res = sep_emit(ch); !res) {
+                    return {String{}, {}};
                 }
                 break;
 
             // semicolon is a separator and begins a comment
             case ';':
-                if (!sep_emit(ch)) {
-                    return Comment{};
+                if (res = sep_emit(ch); !res) {
+                    return {Comment{}, {}};
                 }
                 break;
 
@@ -367,7 +400,7 @@ struct Handler
                 if (build.empty()) {
                     // add the colon, begin keyword
                     build.push_back(ch);
-                    return Keyword{};
+                    return {Keyword{}, {}};
                 } else {
                     // todo: this kinda looks like it'll allow multiple
                     // colons in a symbol...that's not right. add test
@@ -377,8 +410,8 @@ struct Handler
 
             // backslash is a separator and begins a char
             case '\\':
-                if (!sep_emit(ch)) {
-                    return Char{};
+                if (res = sep_emit(ch); !res) {
+                    return {Char{}, {}};
                 }
                 break;
 
@@ -388,10 +421,10 @@ struct Handler
                 break;
         }
 
-        return state;
+        return {state, res};
     }
 
-    State handle(Char&& state, char ch)
+    StateAtom handle(Char&& state, char ch)
     {
         // shouldn't have collected anything yet
         assert(build.empty());
@@ -406,8 +439,7 @@ struct Handler
             if (!nextch || is_sep(*nextch)) {
                 // no more chars, or followed by a sep. emit.
                 build.push_back(ch);
-                emit(Tk::chr);
-                return Normal{};
+                return {Normal{}, emit(Tk::chr)};
             }
 
             // otherwise, see if it's unicode or octal
@@ -434,8 +466,7 @@ struct Handler
                     throwError("invalid unicode character");
                 }
                 build.push_back(ch);
-                emit(Tk::chr);
-                return Normal{};
+                return {Normal{}, emit(Tk::chr)};
             }
 
             if (ch == 'o') { // octal value?
@@ -456,8 +487,7 @@ struct Handler
                     throwError("invalid unicode character");
                 }
                 build.push_back(ch);
-                emit(Tk::chr);
-                return Normal{};
+                return {Normal{}, emit(Tk::chr)};
             }
 
             // if none of those, then we should see
@@ -514,23 +544,21 @@ struct Handler
             }
 
             build.push_back(result);
-            emit(Tk::chr);
-            return Normal{};
+            return {Normal{}, emit(Tk::chr)};
         } catch (std::out_of_range&) {
             throwError("unsupported character");
         }
 
         // really, should never get here
         assert(false);
-        return state;
+        return {state, {}};
     }
 
-    State handle(String&& state, char ch)
+    StateAtom handle(String&& state, char ch)
     {
         if (ch == '"') {
             // end of string
-            emit(Tk::str);
-            return Normal{};
+            return {Normal{}, emit(Tk::str)};
         } else if (ch == '\\') {
             // todo: do we want to actually eval the
             // escaped character?
@@ -545,14 +573,14 @@ struct Handler
             build.push_back(ch);
         }
 
-        return state;
+        return {state, {}};
     }
 
-    State handle(Comment&& state, char ch)
+    StateAtom handle(Comment&& state, char ch)
     {
         if (ch == '\n') {
             m_pos.line++;
-            return Normal{};
+            return {Normal{}, {}};
         }
 
         if (ch == '\r') {
@@ -562,13 +590,13 @@ struct Handler
             }
 
             m_pos.line++;
-            return Normal{};
+            return {Normal{}, {}};
         }
 
-        return state;
+        return {state, {}};
     }
 
-    State handle(Keyword&& state, char ch)
+    StateAtom handle(Keyword&& state, char ch)
     {
         if (is_word(ch) ||
                 (ch == ':' && build.size() == 1)) {
@@ -578,36 +606,34 @@ struct Handler
             // need at least one char beyond the colon
             // before adding a namespace
             build.push_back(ch);
-            return NamespacedKeyword{};
+            return {NamespacedKeyword{}, {}};
         } else if (build.size() > 1) {
             // we're done here.
             unget_next(ch);
-            emit(Tk::keyword);
-            return Normal{};
+            return {Normal{}, emit(Tk::keyword)};
         } else {
             // can't end a keyword with just a colon
             throwError("invalid keyword");
         }
 
-        return state;
+        return {state, {}};
     }
 
-    State handle(NamespacedKeyword&& state, char ch)
+    StateAtom handle(NamespacedKeyword&& state, char ch)
     {
         if (is_word(ch)) {
             build.push_back(ch);
         } else if (!build.empty()) {
             unget_next(ch);
-            emit(Tk::keyword);
-            return Normal{};
+            return {Normal{}, emit(Tk::keyword)};
         } else {
             throwError("invalid keyword");
         }
 
-        return state;
+        return {state, {}};
     }
 
-    State handle(Number&& state, char ch)
+    StateAtom handle(Number&& state, char ch)
     {
         if ('0' <= ch && ch <= '9') {
             // todo: handle octal!
@@ -617,37 +643,36 @@ struct Handler
             state.curr_int += to_digit(ch);
             build.push_back(ch);
         } else if (ch == '.') {
-            return DecimalNumber{state};
+            return {DecimalNumber{state}, {}};
         } else if (ch == 'r' || ch == 'R') {
             state.curr_base = state.curr_int;
             state.curr_int = 0;
             // todo: verify base 2-32 (check docs to make sure it's 32)
             build.push_back(ch);
-            return IntegerNumber{state};
+            return {IntegerNumber{state}, {}};
         } else if (ch == 'x' || ch == 'X') {
             state.curr_base = 16;
             state.curr_int = 0;
             build.push_back(ch);
-            return IntegerNumber{state};
+            return {IntegerNumber{state}, {}};
         } else if (is_sep(ch)) {
             unget_next(ch);
-            emit(Tk::num);
-            return Normal{};
+            return {Normal{}, emit(Tk::num)};
         } else {
             throwError("invalid number");
         }
 
-        return state;
+        return {state, {}};
     }
 
-    State handle(DecimalNumber&& state, char ch)
+    StateAtom handle(DecimalNumber&& state, char ch)
     {
         // todo: add decimal unit tests
         // todo: implement decimals
         throwError("decimals not implemented");
     }
 
-    State handle(IntegerNumber&& state, char ch)
+    StateAtom handle(IntegerNumber&& state, char ch)
     {
         if (('0' <= ch && ch <= '9') ||
                 ('A' <= ch && ch <= 'Z') ||
@@ -666,13 +691,12 @@ struct Handler
             }
         } else if (is_sep(ch)) {
             unget_next(ch);
-            emit(Tk::num);
-            return Normal{};
+            return {Normal{}, emit(Tk::num)};
         } else {
             throwError("invalid integer");
         }
 
-        return state;
+        return {state, {}};
     }
 
     char get_next()
@@ -716,34 +740,205 @@ struct Handler
     }
 
     // emit a single token
-    void emit(Tk t)
+    [[nodiscard]] atom::patom emit(Tk t)
     {
-        this->t = t;
+        Token tk{t, std::string(build.data(), build.size())};
+        build.clear();
+
+        // cheating?
+        if (tk.s == "nil"sv) {
+            tk.t = Tk::nil;
+        }
+
+        return handleToken(tk);
     }
 
     // emit a symbol if one has accumulated
-    [[nodiscard]] bool sep_emit(char ch)
+    [[nodiscard]] atom::patom sep_emit(char ch)
     {
         // this is called for any separator char
         // to emit any accumulated symbol
         if (!build.empty()) {
-            unget_next(ch);
-            emit(Tk::sym);
-            return true;
-        } else {
-            return false;
+            if (auto atom = emit(Tk::sym); atom) {
+                unget_next(ch);
+                return atom;
+            }
         }
+        return {};
     }
 
     // emit a symbol if one has accumulated, or emit a
     // token if not (this can be called twice, to flush
     // then emit some single char token)
-    void sep_emit(char ch, Tk t)
+    [[nodiscard]] atom::patom sep_emit(char ch, Tk t)
     {
-        if (!sep_emit(ch)) {
+        if (auto atom = sep_emit(ch); atom) {
+            return atom;
+        } else {
             build.push_back(ch);
-            emit(t);
+            return emit(t);
         }
+    }
+
+    ReaderFrame* topFrame()
+    {
+        if (!m_stack.empty()) {
+            return &m_stack.back();
+        }
+
+        return nullptr;
+    }
+
+    atom::patom pushAtom(atom::patom atom)
+    {
+        auto frame = topFrame();
+        if (frame) {
+            // wrap in quote if needed
+            if (frame->quoteNext) {
+                atom = quoteAtom(atom);
+                frame->quoteNext = false;
+            }
+
+            frame->push(m_pos, atom);
+            return {};
+        } else {
+            if (m_quoteNext) {
+                atom = quoteAtom(atom);
+                m_quoteNext = false;
+            }
+
+            return atom;
+        }
+    }
+
+    atom::patom endFrame()
+    {
+        // TODO: error on map with leftover keys!
+
+        switch (m_stack.size()) {
+            case 0:
+                throwError("unhandled empty stack on frame end");
+            case 1: {
+                auto frame = topFrame();
+                auto seq = frame->seq;
+                if (m_quoteNext) {
+                    seq = quoteAtom(seq);
+                    m_quoteNext = false;
+                } else if (frame->quoteNext) {
+                    throwError("unexpected quote");
+                }
+
+                // clear stack
+                m_stack.clear();
+                return seq;
+            }
+            default: // > 1
+            {
+                auto frame = topFrame();
+                auto seq = frame->seq;
+
+                // pop it
+                m_stack.pop_back();
+
+                frame = topFrame();
+                // prefix quote if needed
+                if (frame->quoteNext) {
+                    seq = quoteAtom(seq);
+                    frame->quoteNext = false;
+                }
+
+                frame->push(m_pos, seq);
+            }
+        }
+
+        return {};
+    }
+
+    atom::patom handleToken(Token t)
+    {
+        switch (t.t) {
+            case Tk::rparen:
+                [[fallthrough]];
+            case Tk::rbracket:
+                [[fallthrough]];
+            case Tk::rcurly:
+                return endFrame();
+            case Tk::sym:
+                return pushAtom(atom::SymName::make_atom(t.s));
+            case Tk::str:
+                return pushAtom(atom::Str::make_atom(t.s));
+            case Tk::keyword:
+                return pushAtom(atom::Keyword::make_atom(t.s));
+            case Tk::chr:
+                // we know it's a slash + whatever text, min 2 chars
+                if (t.s.size() == 1) {
+                    return pushAtom(atom::Char::make_atom(t.s.front()));
+                } else if (t.s.size() == 4 && t.s.front() == 'o') {
+                    int base = 8;
+
+                    int i = 0;
+                    auto [p, _] = std::from_chars(
+                            t.s.data() + 1, t.s.data() + t.s.size(), i, base);
+                    if (p != t.s.data()) {
+                        return pushAtom(atom::Char::make_atom(static_cast<char32_t>(i)));
+                    } else {
+                        throwError("unable to parse octal char");
+                    }
+                } else if (t.s.size() == 5 && t.s.front() == 'u') {
+                    int base = 16;
+
+                    int i = 0;
+                    auto [p, _] = std::from_chars(
+                            t.s.data() + 1, t.s.data() + t.s.size(), i, base);
+                    if (p != t.s.data()) {
+                        return pushAtom(atom::Char::make_atom(static_cast<char32_t>(i)));
+                    } else {
+                        throwError("unable to parse unicode char");
+                    }
+                } else {
+                    throwError("unexpected character size");
+                }
+                break;
+            case Tk::nil:
+                return pushAtom(atom::Nil);
+            case Tk::num: {
+                // note: only handling base 10 and 16
+                int base = 10;
+                std::size_t off = 0;
+                if (t.s.size() > 2) {
+                    // todo: in c++20, starts_with
+                    auto prefix = t.s.substr(0, 2);
+                    if (prefix == "0x"sv || prefix == "0X"sv) {
+                        base = 16;
+                        off = 2;
+                    }
+                }
+                int i = 0;
+                auto [p, _] = std::from_chars(
+                        t.s.data() + off, t.s.data() + t.s.size(), i, base);
+                if (p != t.s.data()) {
+                    return pushAtom(atom::Num::make_atom(i));
+                } else {
+                    throwError(
+                            fmt::format(
+                                    "invalid numeric format for '{}'", t.s));
+                }
+                break;
+            }
+            case Tk::quote: {
+                auto frame = topFrame();
+                if (frame) {
+                    frame->quoteNext = true;
+                } else {
+                    m_quoteNext = true;
+                }
+                break;
+            }
+            default:
+                throwError(fmt::format("unexpected token in read {}", t.t));
+        }
+
+        return {};
     }
 
     std::string_view src;
@@ -753,37 +948,32 @@ struct Handler
     std::vector<char> build;
 
     State state;
-    Tk t = Tk::none;
+
+    std::vector<ReaderFrame> m_stack;
+    bool m_quoteNext = false;
 };
 
-Token Handler::findToken()
+atom::patom Handler2::findAtom()
 {
+    atom::patom value;
+
     while (!src.empty() || buf) {
         char ch = get_next();
-        state = std::visit(
-                [this, ch](auto&& state) -> State {
+        std::tie(state, value) = std::visit(
+                [this, ch](auto&& state) -> StateAtom {
                     return handle(std::move(state), ch);
                 },
                 state);
 
-        if (t != Tk::none) {
-            Token tk{t, std::string(build.data(), build.size())};
-            build.clear();
-            t = Tk::none;
-
-            // cheating?
-            if (tk.s == "nil"sv) {
-                tk.t = Tk::nil;
-            }
-
-            return tk;
+        if (value) {
+            return value;
         }
     }
 
     // stuff left to emit?
     if (!build.empty()) {
         return std::visit(
-                [this](auto&& state) -> Token {
+                [this](auto&& state) -> atom::patom {
                     using T = std::decay_t<decltype(state)>;
                     std::string str{build.data(), build.size()};
                     build.clear();
@@ -791,9 +981,9 @@ Token Handler::findToken()
                     if constexpr (std::is_same_v<T, Normal>) {
                         // cheating?
                         if (str == "nil"sv) {
-                            return {Tk::nil, str};
+                            return handleToken({Tk::nil, str});
                         } else {
-                            return {Tk::sym, str};
+                            return handleToken({Tk::sym, str});
                         }
                     } else if constexpr (std::is_same_v<T, Char>) {
                         // char finishes itself or throws. if we
@@ -801,84 +991,91 @@ Token Handler::findToken()
                         assert(false);
                         throwError("unsupported character");
                     } else if constexpr (std::is_same_v<T, String>) {
-                        return {Tk::str, str};
+                        return handleToken({Tk::str, str});
                     } else if constexpr (std::is_same_v<T, Comment>) {
                         // we shouldn't accumulate comments
                         assert(str.empty());
-                        return {Tk::none};
+                        return handleToken({Tk::none});
                     } else if constexpr (
                             std::is_same_v<T, Keyword> ||
                             std::is_same_v<T, NamespacedKeyword>) {
-                        return {Tk::keyword, str};
+                        return handleToken({Tk::keyword, str});
                     } else if constexpr (
                             std::is_same_v<T, Number> ||
                             std::is_same_v<T, DecimalNumber> ||
                             std::is_same_v<T, IntegerNumber>) {
-                        return {Tk::num, str};
+                        return handleToken({Tk::num, str});
                     }
                 },
                 state);
     }
 
-    return {Tk::eof, {}};
+    return {};
 }
 
-class TokenizerImpl : public Tokenizer
+class ReaderImpl : public Reader
 {
 public:
-    TokenizerImpl(std::string_view data, std::string_view name) :
-        handler(data, name)
-    {
-    }
+    ReaderImpl(std::string_view str,
+            std::string_view name) :
+        m_p(createParser(createTokenizer(str, "internal-test")))
+    {}
 
-    Position position() const noexcept { return handler.m_pos; }
-
-    // todo: perfect use for c++20 coroutines
     bool next()
     {
-        if (m_tk.t == Tk::eof) {
-            return false;
-        }
-
-        m_tk = handler.findToken();
-        return m_tk.t != Tk::eof;
+        return m_p->next();
     }
 
-    Token value() const { return m_tk; }
+    atom::patom value()
+    {
+        return m_p->value();
+    }
 
 private:
-    Handler handler;
-
-    Token m_tk;
+    std::shared_ptr<Parser> m_p;
 };
 
-/*
+class ReaderImpl2 : public Reader
+{
+public:
+    ReaderImpl2(std::string_view str,
+            std::string_view name) :
+        handler(str, name)
+    {
+        m_value = handler.findAtom();
+    }
 
-switch state
+    bool next()
+    {
+        if (first) {
+            first = false;
+            return static_cast<bool>(m_value);
+        }
 
-case number_decimal
-    assert !tk.empty and c != '-' // should have handled leading - in number_base10
-    if tk.empty
-        curr_decimal = curr_int
-    must handle inner .
-    case '0' ... '9':
-        if !tk.empty
-            curr_int *= curr_base
-        curr_int += dig(c)
-        if neg
-            curr_decimal = -curr_decimal
-    default:
-        if isseparator(c):
-            if neg
-                curr_decimal = -curr_decimal
-            emit
-        else
-            throw invalid number
+        m_value = handler.findAtom();
+        return static_cast<bool>(m_value);
+    }
 
-*/
+    atom::patom value()
+    {
+        return m_value;
+    }
 
-std::shared_ptr<Tokenizer> createTokenizer(std::string_view data,
+private:
+    Handler2 handler;
+    bool first = true;
+    atom::patom m_value;
+};
+
+std::shared_ptr<Reader> createReader(std::string_view str,
         std::string_view name)
 {
-    return std::make_shared<TokenizerImpl>(data, name);
+    return std::make_shared<ReaderImpl>(str, name);
+}
+
+// todo: hack
+std::shared_ptr<Reader> createReader2(std::string_view str,
+        std::string_view name)
+{
+    return std::make_shared<ReaderImpl2>(str, name);
 }

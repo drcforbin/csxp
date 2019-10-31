@@ -1,6 +1,7 @@
 #ifndef ATOM_FMT_H
 #define ATOM_FMT_H
 
+#include "atom.h"
 #include "fmt/format.h"
 
 namespace fmt {
@@ -56,7 +57,8 @@ struct formatter<atom::Char>
     auto format(const atom::Char& c, FormatContext& ctx)
     {
         // todo: format newline, unicode, octal
-        return format_to(ctx.out(), "\\{}", c.val);
+        //return format_to(ctx.out(), "\\{}", c.val);
+        return format_to(ctx.out(), "<char>");
     }
 };
 
@@ -117,6 +119,34 @@ struct formatter<atom::List>
 };
 
 template <>
+struct formatter<atom::Map>
+{
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext& ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const atom::Map& m, FormatContext& ctx)
+    {
+        /*
+        format_to(ctx.out(), "(");
+        for (std::size_t i = 0; i < l.items.size(); i++) {
+            if (i != 0) {
+                format_to(ctx.out(), " ");
+            }
+
+            format_to(ctx.out(), "{}", *l.items[i]);
+        }
+        return format_to(ctx.out(), ")");
+        */
+        // todo: map
+        return format_to(ctx.out(), "{???}");
+    }
+};
+
+template <>
 struct formatter<atom::Num>
 {
     template <typename ParseContext>
@@ -144,9 +174,11 @@ struct formatter<atom::Seq>
     template <typename FormatContext>
     auto format(const atom::Seq& s, FormatContext& ctx)
     {
-        if (auto v = dynamic_cast<atom::Vec*>(&s)) {
+        if (auto m = dynamic_cast<const atom::Map*>(&s)) {
+            return format_to(ctx.out(), "{}", *m);
+        } else if (auto v = dynamic_cast<const atom::Vec*>(&s)) {
             return format_to(ctx.out(), "{}", *v);
-        } else if (auto l = dynamic_cast<atom::List*>(&s)) {
+        } else if (auto l = dynamic_cast<const atom::List*>(&s)) {
             return format_to(ctx.out(), "{}", *l);
         } else {
             // todo: add type to msg
@@ -167,7 +199,8 @@ struct formatter<atom::Str>
     template <typename FormatContext>
     auto format(const atom::Str& s, FormatContext& ctx)
     {
-        return format_to(ctx.out(), "{}", s.val);
+        // todo: render escaped chars
+        return format_to(ctx.out(), "\"{}\"", s.val);
     }
 };
 
@@ -239,7 +272,9 @@ struct formatter<atom::atom>
                             std::is_same_v<T, std::shared_ptr<atom::SymName>>) {
                         return format_to(ctx.out(), "{}", *val);
                     } else if constexpr (std::is_same_v<T, std::shared_ptr<atom::Seq>>) {
-                        if (auto l = std::dynamic_pointer_cast<atom::List>(val)) {
+                        if (auto m = std::dynamic_pointer_cast<atom::Map>(val)) {
+                            return format_to(ctx.out(), "{}", *m);
+                        } else if (auto l = std::dynamic_pointer_cast<atom::List>(val)) {
                             return format_to(ctx.out(), "{}", *l);
                         } else if (auto v = std::dynamic_pointer_cast<atom::Vec>(val)) {
                             return format_to(ctx.out(), "{}", *v);
@@ -248,13 +283,14 @@ struct formatter<atom::atom>
                             throw std::runtime_error("unexpected seq type in atom formatter");
                         }
                     } else {
+                        return format_to(ctx.out(), "<unknown type>");
                         // todo: add eval map
                         // todo: add type to msg
                         // return format_to(ctx.out(), "huh? {}", typeid(T).name());
-                        throw std::runtime_error("unexpected type in atom formatter");
+                        //throw std::runtime_error("unexpected type in atom formatter");
                     }
                 },
-            a.p);
+                a.p);
     }
 };
 

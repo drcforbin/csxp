@@ -4,13 +4,23 @@
 
 namespace lib::detail::math {
 
+// todo: test (+) == 0
+// todo: test (+ 4) == 4
+// todo: test (+ -4) == -4
+// todo: test (+ 2 -4) == -2
+// todo: test (+ -4 2) == -2
+// todo: test (+ -4 2 3) == 1
+// todo: test (+ 2 3 -4) == 1
+
 atom::patom add(Env* env, atom::AtomIterator* args)
 {
     int sum = 0;
 
-    // todo: is it an error if there are no args?
+    if (!args->next()) {
+        return atom::Num::make_atom(0);
+    }
 
-    while (args->next()) {
+    do {
         auto valAtom = env->eval(args->value());
 
         if (auto num = std::get_if<std::shared_ptr<atom::Num>>(&valAtom->p)) {
@@ -18,7 +28,44 @@ atom::patom add(Env* env, atom::AtomIterator* args)
         } else {
             throw lib::LibError("+ arg did not evaluate to a num");
         }
+    } while (args->next());
+
+    return atom::Num::make_atom(sum);
+}
+
+// todo: test (-) == error
+// todo: test (- 4) == -4
+// todo: test (- 4 3) == 1
+// todo: test (- 4 2 1) == 1
+
+atom::patom sub(Env* env, atom::AtomIterator* args)
+{
+    if (!args->next()) {
+        throw lib::LibError(" wrong number of args passed to -");
     }
+
+    auto valAtom = env->eval(args->value());
+
+    int sum = 0;
+    if (auto num = std::get_if<std::shared_ptr<atom::Num>>(&valAtom->p)) {
+        // if we don't have a next arg, just negate the arg
+        if (!args->next()) {
+            return atom::Num::make_atom(-(*num)->val);
+        } else {
+            sum = (*num)->val;
+        }
+    } else {
+        throw lib::LibError("- arg did not evaluate to a num");
+    }
+
+    do {
+        valAtom = env->eval(args->value());
+        if (auto num = std::get_if<std::shared_ptr<atom::Num>>(&valAtom->p)) {
+            sum -= (*num)->val;
+        } else {
+            throw lib::LibError("- arg did not evaluate to a num");
+        }
+    } while (args->next());
 
     return atom::Num::make_atom(sum);
 }

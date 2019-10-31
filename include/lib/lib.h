@@ -1,11 +1,11 @@
 #ifndef LIB_LIB_H
 #define LIB_LIB_H
 
-#include "detail-op.h"
 #include "detail-core.h"
 #include "detail-fn.h"
+#include "detail-op.h"
 
-class Env;
+struct Env;
 
 // todo: yeah, namespace name sucks
 namespace lib {
@@ -29,4 +29,3 @@ void addMath(Env* env);
 } // namespace lib
 
 #endif // LIB_LIB_H
-

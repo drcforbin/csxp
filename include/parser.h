@@ -5,6 +5,7 @@
 #include "tokenizer.h"
 
 #include <stdexcept>
+#include <string>
 
 class ParserError : public std::runtime_error
 {
@@ -33,13 +34,16 @@ struct Parser
     virtual atom::patom value() = 0;
 
     // todo: implement const iterator too
-    class ParserIt {
+    class ParserIt
+    {
     private:
         class AtomHolder
         {
         public:
-            AtomHolder(atom::patom atom): atom(atom) {}
+            AtomHolder(atom::patom atom) :
+                atom(atom) {}
             atom::patom operator*() { return atom; }
+
         private:
             atom::patom atom;
         };
@@ -51,7 +55,8 @@ struct Parser
         typedef atom::patom& reference;
         typedef std::input_iterator_tag iterator_category;
 
-        explicit ParserIt(Parser* p) : p(p) {}
+        explicit ParserIt(Parser* p) :
+            p(p) {}
         atom::patom operator*() const { return curr; }
         const atom::patom* operator->() const { return &curr; }
         bool operator==(const ParserIt& other) const { return p == other.p; }
@@ -67,9 +72,9 @@ struct Parser
         ParserIt& operator++()
         {
             if (p) {
-                if(!p->next()) {
+                if (!p->next()) {
                     p = nullptr;
-                }else {
+                } else {
                     curr = p->value();
                 }
             }
@@ -81,10 +86,16 @@ struct Parser
         atom::patom curr;
     };
 
-    ParserIt begin(){ auto it = ParserIt(this); return ++it; }
+    ParserIt begin()
+    {
+        auto it = ParserIt(this);
+        return ++it;
+    }
     ParserIt end() { return ParserIt(nullptr); }
 };
 
+// note: parser does not take ownership of or copy str or name.
+// both must exist for the lifetime of the reader
 std::shared_ptr<Parser> createParser(std::shared_ptr<Tokenizer> tz);
 
 #endif // PARSER_H

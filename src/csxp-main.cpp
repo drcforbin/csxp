@@ -1,9 +1,11 @@
+#include "atom-fmt.h"
 #include "atom.h"
 #include "env.h"
 #include "fmt/format.h"
 #include "lib/lib.h"
 #include "logging.h"
 #include "parser.h"
+#include "reader.h"
 #include "tokenizer.h"
 
 #include <cstdlib>
@@ -12,6 +14,59 @@
 #include <streambuf>
 
 #define LOGGER() (logging::get("csxp-main"))
+
+void dump(atom::patom a, int indent = 0)
+{
+    // todo: better way?
+    std::string dent;
+    for (int i = indent; i > 0; i--) {
+        dent += " ";
+    }
+
+    std::visit(
+            [ indent, &dent ](auto&& val) -> auto {
+                using T = std::decay_t<decltype(val)>;
+
+                if constexpr (std::is_same_v<T, std::monostate>) {
+                    // noop
+                } else if constexpr (std::is_same_v<T, std::shared_ptr<atom::Callable>>) {
+                    fmt::print("{} callable\n", dent);
+                } else if constexpr (std::is_same_v<T, std::shared_ptr<atom::Char>>) {
+                    fmt::print("{} char\n", dent);
+                } else if constexpr (std::is_same_v<T, std::shared_ptr<atom::Const>>) {
+                    fmt::print("{} const\n", dent);
+                } else if constexpr (std::is_same_v<T, std::shared_ptr<atom::Keyword>>) {
+                    fmt::print("{} keyword\n", dent);
+                } else if constexpr (std::is_same_v<T, std::shared_ptr<atom::Num>>) {
+                    fmt::print("{} num {}\n", dent, val->val);
+                } else if constexpr (std::is_same_v<T, std::shared_ptr<atom::Str>>) {
+                    fmt::print("{} str\n", dent);
+                } else if constexpr (std::is_same_v<T, std::shared_ptr<atom::SymName>>) {
+                    fmt::print("{} sym\n", dent);
+                } else if constexpr (std::is_same_v<T, std::shared_ptr<atom::Seq>>) {
+                    if (auto m = std::dynamic_pointer_cast<atom::Map>(val)) {
+                        fmt::print("{} map\n", dent);
+                    } else if (auto l = std::dynamic_pointer_cast<atom::List>(val)) {
+                        fmt::print("{} lst\n", dent);
+                    } else if (auto v = std::dynamic_pointer_cast<atom::Vec>(val)) {
+                        fmt::print("{} vec\n", dent);
+                    } else {
+                        // todo: add type to msg
+                        throw std::runtime_error("unexpected seq type in atom formatter");
+                    }
+
+                    auto it = val->iterator();
+                    while (it->next()) {
+                        dump(it->value(), indent + 1);
+                    }
+                } else {
+                    // todo: add type to msg
+                    // return format_to(ctx.out(), "huh? {}", typeid(T).name());
+                    throw std::runtime_error("unexpected type in atom formatter");
+                }
+            },
+            a->p);
+}
 
 static void exit_help(int code)
 {
@@ -25,24 +80,28 @@ static void exit_help(int code)
 
 static void exit_version()
 {
-    // todo:
+    // todo: versioning
     // fmt::print("csxp {}\n", version_string());
     fmt::print("csxp {}\n", "1.0.0");
     std::exit(EXIT_SUCCESS);
 }
 
+// todo: remove dummy lib
+void register_rwte(Env* env);
+
 int main(int argc, char* argv[])
 {
     constexpr struct option long_options[] =
-    {
-        {"exec", required_argument, nullptr, 'e'},
-        {"help", no_argument, nullptr, 'h'},
-        {"version", no_argument, nullptr, 'v'},
-        {nullptr, 0, nullptr, 0}
-    };
+            {
+                    {"exec", required_argument, nullptr, 'e'},
+                    {"test", required_argument, nullptr, 't'},
+                    {"help", no_argument, nullptr, 'h'},
+                    {"version", no_argument, nullptr, 'v'},
+                    {nullptr, 0, nullptr, 0}};
 
-    const char* optargstr = "-e:hv";
+    const char* optargstr = "-e:t:hv";
 
+    const char* test_path = nullptr;
     const char* exe_path = nullptr;
 
     int opt;
@@ -52,6 +111,10 @@ int main(int argc, char* argv[])
             case 'e':
                 LOGGER()->info("exec: {}", optarg);
                 exe_path = optarg;
+                break;
+            case 't':
+                LOGGER()->info("test: {}", optarg);
+                test_path = optarg;
                 break;
             case 'h':
                 exit_help(EXIT_SUCCESS);
@@ -80,10 +143,13 @@ int main(int argc, char* argv[])
         }
     }
 
+    if (exe_path && test_path) {
+        fmt::print(stderr, "{}: cannot specify exec and test\n", argv[0]);
+    }
+
     if (exe_path) {
         std::ifstream in(exe_path, std::ios::in | std::ios::binary);
-        if (in)
-        {
+        if (in) {
             std::string str;
             in.seekg(0, std::ios::end);
             str.resize(in.tellg());
@@ -92,18 +158,54 @@ int main(int argc, char* argv[])
             in.close();
 
             try {
-            // set up basic env
-            auto env = createEnv();
-            lib::addCore(env.get());
-            lib::addMath(env.get());
+                // set up basic env
+                auto env = createEnv();
+                lib::addCore(env.get());
+                lib::addMath(env.get());
 
-            auto tz = createTokenizer(str, exe_path);
-            auto p = createParser(tz);
+                register_rwte(env.get());
 
-            atom::patom res = atom::Nil;
-            while (p->next()) {
-                res = env->eval(p->value());
+                auto r = createReader2(str, exe_path);
+
+                atom::patom res = atom::Nil;
+                while (r->next()) {
+                    res = env->eval(r->value());
+                }
+            } catch (const EnvError& e) {
+                LOGGER()->error("env error: {}", e.what());
+            } catch (const ParserError& e) {
+                LOGGER()->error("parser error: {}", e.what());
+            } catch (const std::runtime_error& e) {
+                LOGGER()->error("unknown error: {}", e.what());
             }
+        } else {
+            LOGGER()->error("unable to open input file '{}'", exe_path);
+        }
+    }
+
+    if (test_path) {
+        std::ifstream in(test_path, std::ios::in | std::ios::binary);
+        if (in) {
+            std::string str;
+            in.seekg(0, std::ios::end);
+            str.resize(in.tellg());
+            in.seekg(0, std::ios::beg);
+            in.read(str.data(), str.size());
+            in.close();
+
+            try {
+                // set up basic env
+                //auto env = createEnv();
+                //lib::addCore(env.get());
+                //lib::addMath(env.get());
+
+                auto r = createReader(str, test_path);
+
+                while (r->next()) {
+                    auto val = r->value();
+                    fmt::print("{}\n", *val);
+                    dump(val);
+                }
             } catch (const EnvError& e) {
                 LOGGER()->error("env error: {}", e.what());
             } catch (const ParserError& e) {

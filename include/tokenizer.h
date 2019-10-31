@@ -3,9 +3,9 @@
 
 #include "fmt/format.h"
 
+#include <iterator>
 #include <memory>
 #include <string>
-#include <iterator>
 
 enum class Tk
 {
@@ -85,7 +85,7 @@ struct fmt::formatter<Tk>
                 return format_to(ctx.out(), "tk::eof");
                 break;
             default:
-                return format_to(ctx.out(), "tk::<unknown {}>", (int)tk);
+                return format_to(ctx.out(), "tk::<unknown {}>", (int) tk);
         }
     }
 };
@@ -116,28 +116,41 @@ struct fmt::formatter<Token>
     auto format(const Token& t, FormatContext& ctx)
     {
         switch (t.t) {
-            case Tk::none: [[fallthrough]];
-            case Tk::lparen: [[fallthrough]];
-            case Tk::lbracket: [[fallthrough]];
-            case Tk::lcurly: [[fallthrough]];
-            case Tk::rparen: [[fallthrough]];
-            case Tk::rbracket: [[fallthrough]];
-            case Tk::rcurly: [[fallthrough]];
-            case Tk::nil: [[fallthrough]];
-            case Tk::quote: [[fallthrough]];
+            case Tk::none:
+                [[fallthrough]];
+            case Tk::lparen:
+                [[fallthrough]];
+            case Tk::lbracket:
+                [[fallthrough]];
+            case Tk::lcurly:
+                [[fallthrough]];
+            case Tk::rparen:
+                [[fallthrough]];
+            case Tk::rbracket:
+                [[fallthrough]];
+            case Tk::rcurly:
+                [[fallthrough]];
+            case Tk::nil:
+                [[fallthrough]];
+            case Tk::quote:
+                [[fallthrough]];
             case Tk::eof:
                 return format_to(ctx.out(), "({})", t.t);
 
-            case Tk::sym: [[fallthrough]];
-            case Tk::str: [[fallthrough]];
-            case Tk::keyword: [[fallthrough]];
-            case Tk::chr: [[fallthrough]];
+            case Tk::sym:
+                [[fallthrough]];
+            case Tk::str:
+                [[fallthrough]];
+            case Tk::keyword:
+                [[fallthrough]];
+            case Tk::chr:
+                [[fallthrough]];
             case Tk::num:
                 return format_to(ctx.out(), "({} '{}')", t.t, t.s);
 
             default:
                 return format_to(ctx.out(), "<unknown tk {}, '{}'>",
-                        (int)t.t, t.s);
+                        (int) t.t, t.s);
         }
     }
 };
@@ -154,13 +167,16 @@ struct Tokenizer
     virtual Token value() const = 0;
 
     // todo: implement const iterator too
-    class TokenizerIt {
+    class TokenizerIt
+    {
     private:
         class TokenHolder
         {
         public:
-            TokenHolder(Token tk): tk(tk) {}
+            TokenHolder(Token tk) :
+                tk(tk) {}
             Token operator*() { return tk; }
+
         private:
             Token tk;
         };
@@ -172,7 +188,8 @@ struct Tokenizer
         typedef Token& reference;
         typedef std::input_iterator_tag iterator_category;
 
-        explicit TokenizerIt(Tokenizer* tz) : tz(tz) {}
+        explicit TokenizerIt(Tokenizer* tz) :
+            tz(tz) {}
         Token operator*() const { return curr; }
         const Token* operator->() const { return &curr; }
         bool operator==(const TokenizerIt& other) const { return tz == other.tz; }
@@ -188,9 +205,9 @@ struct Tokenizer
         TokenizerIt& operator++()
         {
             if (tz) {
-                if(!tz->next()) {
+                if (!tz->next()) {
                     tz = nullptr;
-                }else {
+                } else {
                     curr = tz->value();
                 }
             }
@@ -202,10 +219,17 @@ struct Tokenizer
         Token curr;
     };
 
-    TokenizerIt begin(){ auto it = TokenizerIt(this); return ++it; }
+    TokenizerIt begin()
+    {
+        auto it = TokenizerIt(this);
+        return ++it;
+    }
+
     TokenizerIt end() { return TokenizerIt(nullptr); }
 };
 
+// note: tokenizer does not take ownership of or copy str or name.
+// both must exist for the lifetime of the reader
 std::shared_ptr<Tokenizer> createTokenizer(std::string_view data,
         std::string_view name);
 

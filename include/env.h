@@ -7,6 +7,8 @@
 #include <memory>
 #include <string_view>
 
+// todo: add the rest of this to the env::namespace
+
 class EnvError : public std::runtime_error
 {
 public:
@@ -17,6 +19,19 @@ public:
     explicit EnvError(const char* what_arg) :
         std::runtime_error(what_arg)
     {}
+};
+
+struct ModuleMember
+{
+    std::string_view name;
+    atom::patom member;
+};
+
+struct Module
+{
+    virtual ~Module() = default;
+
+    virtual void addMembers(const std::vector<ModuleMember>& members) = 0;
 };
 
 struct Env
@@ -31,13 +46,21 @@ struct Env
     virtual void setInternal(std::string_view name, const atom::patom& val) = 0;
     virtual void setInternal(const atom::SymName* name,
             const atom::patom& val) = 0;
+    virtual void registerModule(std::string_view nsname,
+            void (*initfunc)(Env* env, std::string_view nsname)) = 0;
+    virtual std::shared_ptr<Module> createModule(std::string_view nsname) = 0;
+    virtual bool hasModule(std::string_view nsname) = 0;
+    virtual void aliasNs(std::string_view nswhere, std::string_view nsname,
+            std::string_view nstarget) = 0;
 };
 
 class EnvScope
 {
 public:
-    EnvScope(Env* env) : env(env) { env->pushScope(); }
+    EnvScope(Env* env) :
+        env(env) { env->pushScope(); }
     ~EnvScope() { env->popScope(); }
+
 private:
     Env* env;
 };

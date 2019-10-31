@@ -2,18 +2,18 @@
 #include "lib/detail-core.h"
 #include "lib/detail-fn.h"
 #include "lib/lib.h"
-
 #include "logging.h"
 #define LOGGER() (logging::get("lib/detail-fn"))
 
 namespace lib::detail::fn {
 
-struct CallableFn : public atom::Callable {
+struct CallableFn : public atom::Callable
+{
     CallableFn(std::shared_ptr<atom::Vec> binding,
-    	std::shared_ptr<atom::Vec> body) :
+            std::shared_ptr<atom::Vec> body) :
         binding(binding),
         body(body)
-    { }
+    {}
 
     atom::patom operator()(Env* env, atom::AtomIterator* args)
     {
@@ -34,7 +34,7 @@ struct CallableFn : public atom::Callable {
     }
 
     std::shared_ptr<atom::Vec> binding;
-	std::shared_ptr<atom::Vec> body;
+    std::shared_ptr<atom::Vec> body;
 };
 
 atom::patom fn(Env* env, atom::AtomIterator* args)
@@ -45,7 +45,7 @@ atom::patom fn(Env* env, atom::AtomIterator* args)
 
     // TODO: metadata
     auto val = args->value();
-    // todo: can nest get_if and cast?
+    // todo: can nest get_if and cast in one if? e.g., combine to a get_vec func?
     if (auto seq = std::get_if<std::shared_ptr<atom::Seq>>(&val->p)) {
         if (auto binding = std::dynamic_pointer_cast<atom::Vec>(*seq)) {
             // todo: naming?
@@ -63,6 +63,23 @@ atom::patom fn(Env* env, atom::AtomIterator* args)
     }
 
     throw lib::LibError("expected fn arg to be a vec of args");
+}
+
+atom::patom defn(Env* env, atom::AtomIterator* args)
+{
+    if (!args->next()) {
+        throw lib::LibError("defn requires a name");
+    }
+
+    auto name = args->value();
+
+    auto f = fn(env, args);
+
+    auto defargs = std::make_shared<atom::Vec>();
+    defargs->items.emplace_back(name);
+    defargs->items.emplace_back(f);
+
+    return lib::detail::core::def(env, defargs->iterator().get());
 }
 
 } // namespace lib::detail::fn

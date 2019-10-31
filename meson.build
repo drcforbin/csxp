@@ -1,38 +1,31 @@
 project('csxp', ['c', 'cpp'],
     version: '1.0.0',
     default_options: [
-        'cpp_std=c++17'
+        'cpp_std=c++17',
+        'b_lto=true',
+        'b_ndebug=if-release'
     ])
-
-#cc = meson.get_compiler('c')
-#
-#xdg_basedir = dependency('libxdg-basedir')
-#xcb = dependency('xcb')
-#xcb_util = dependency('xcb-util')
-#cairo = dependency('cairo')
-#pangocairo = dependency('pangocairo')
-#xkbc = dependency('xkbcommon')
-#xkbc_x11 = dependency('xkbcommon-x11')
-#xcd_xkb = dependency('xcb-xkb')
-#wayland_client = dependency('wayland-client')
-#wayland_cursor = dependency('wayland-cursor')
-#lua = dependency('lua')
-#ev = cc.find_library('ev')
-#util = cc.find_library('util')
-#rt = cc.find_library('rt')
-
-#csxp_common_deps = [
-#    xdg_basedir,
-#    cairo,
-#    pangocairo,
-#    xkbc,
-#    lua,
-#    ev,
-#    util,
-#    rt
-#]
 
 inc = include_directories('include')
 
+common_sources = files(
+    'src/atom.cpp',
+    'src/env.cpp',
+    'src/fmt/format.cc',
+    'src/fmt/posix.cc',
+    'src/lib/detail-core.cpp',
+    'src/lib/detail-fn.cpp',
+    'src/lib/detail-math.cpp',
+    'src/lib/detail-op.cpp',
+    'src/lib/lib.cpp',
+    'src/logging.cpp',
+    'src/parser.cpp',
+    'src/reader.cpp',
+    'src/tokenizer.cpp',
+)
+
+
+subdir('bench')
 subdir('src')
+subdir('test')
 

@@ -1,6 +1,8 @@
 #ifndef ATOM_H
 #define ATOM_H
 
+#include "pdata/map.h"
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -21,6 +23,7 @@ struct Char;
 struct Const;
 struct Keyword;
 struct List; // not in variant_type
+struct Map;  // not in variant_type
 struct Num;
 struct Seq;
 struct Str;
@@ -31,7 +34,7 @@ struct atom
 {
     // todo: using shared_ptr seems lazy...unique_ptr may be a better fit
 
-    // note that list and vec are not in the variant; they need to be
+    // note that list, vec, and map are not in the variant; they need to be
     // casted from seq to their specific types.
     using variant_type = std::variant<
             std::monostate,
@@ -107,8 +110,10 @@ private:
     class AtomHolder
     {
     public:
-        AtomHolder(patom atom): atom(atom) {}
+        AtomHolder(patom atom) :
+            atom(atom) {}
         patom operator*() { return atom; }
+
     private:
         patom atom;
     };
@@ -142,9 +147,9 @@ public:
     SeqIt& operator++()
     {
         if (it) {
-            if(!it->next()) {
+            if (!it->next()) {
                 it.reset();
-            }else {
+            } else {
                 curr = it->value();
             }
         }
@@ -240,6 +245,32 @@ struct List : public Seq, std::enable_shared_from_this<List>
 
     // cheating, I think
     std::vector<patom> items;
+};
+
+struct Map : public Seq, std::enable_shared_from_this<Map>
+{
+    Map() = default;
+    Map(std::vector<std::pair<patom, patom>>& pairs)
+    {
+        //for (auto& item : items) {
+        //    items->assoc
+        //}
+    }
+
+    static patom make_atom()
+    {
+        return std::make_shared<atom>(std::make_shared<Map>());
+    }
+
+    static patom make_atom(std::vector<std::pair<patom, patom>> items)
+    {
+        return std::make_shared<atom>(std::make_shared<Map>(items));
+    }
+
+    std::shared_ptr<AtomIterator> iterator() const;
+
+    std::shared_ptr<pdata::map_base<patom, patom>> items =
+            std::make_shared<pdata::persistent_map<patom, patom>>();
 };
 
 struct Num

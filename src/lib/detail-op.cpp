@@ -15,17 +15,20 @@ atom::patom eq(Env* env, atom::AtomIterator* args)
 
     auto a = env->eval(args->value());
 
+    // todo: handle single arg
     if (!args->next()) {
-        throw lib::LibError("= requires two args");
+        throw lib::LibError("= requires at least two args");
     }
 
-    auto b = env->eval(args->value());
+    do {
+        auto b = env->eval(args->value());
 
-    if (*a == *b) {
-        return atom::True;
-    }
+        if (*a != *b) {
+            return atom::False;
+        }
+    } while (args->next());
 
-    return atom::False;
+    return atom::True;
 }
 
 atom::patom neq(Env* env, atom::AtomIterator* args)
@@ -34,19 +37,22 @@ atom::patom neq(Env* env, atom::AtomIterator* args)
         throw lib::LibError("not= requires two args");
     }
 
+    // todo: handle single arg
     auto a = env->eval(args->value());
 
     if (!args->next()) {
-        throw lib::LibError("not= requires two args");
+        throw lib::LibError("not= requires at least two args");
     }
 
-    auto b = env->eval(args->value());
+    do {
+        auto b = env->eval(args->value());
 
-    if (*a != *b) {
-        return atom::True;
-    }
+        if (*a == *b) {
+            return atom::False;
+        }
+    } while (args->next());
 
-    return atom::False;
+    return atom::True;
 }
 
 atom::patom not_(Env* env, atom::AtomIterator* args)
@@ -62,6 +68,40 @@ atom::patom not_(Env* env, atom::AtomIterator* args)
     }
 
     return atom::False;
+}
+
+atom::patom and_(Env* env, atom::AtomIterator* args)
+{
+    if (!args->next()) {
+        return atom::True;
+    }
+
+    atom::patom res;
+    do {
+        res = env->eval(args->value());
+        if (!atom::truthy(res)) {
+            break;
+        }
+    } while (args->next());
+
+    return res;
+}
+
+atom::patom or_(Env* env, atom::AtomIterator* args)
+{
+    if (!args->next()) {
+        return atom::Nil;
+    }
+
+    atom::patom res;
+    do {
+        res = env->eval(args->value());
+        if (atom::truthy(res)) {
+            break;
+        }
+    } while (args->next());
+
+    return res;
 }
 
 } // namespace lib::detail::op
