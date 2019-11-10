@@ -1,0 +1,10 @@
+#include <string_view>
+
+using namespace std::literals;
+
+namespace csxp {
+std::string_view version_string()
+{
+    return "@version@"sv;
+}
+} // namespace csxp

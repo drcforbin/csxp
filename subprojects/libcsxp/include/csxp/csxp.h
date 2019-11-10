@@ -1,10 +1,17 @@
 #ifndef CSXP_H
 #define CSXP_H
 
+#include "csxp/atom.h"
+#include "csxp/env.h"
+#include "csxp/lib/lib.h"
+#include "csxp/logging.h"
+#include "csxp/reader.h"
+
+//#include <string_view>
+
 namespace csxp {
 
-// todo: remove
-int somefunc();
+std::string_view version_string();
 
 } // namespace csxp
 

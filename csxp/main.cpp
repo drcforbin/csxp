@@ -1,3 +1,4 @@
+#include "csxp/csxp.h"
 #include "csxp/atom_fmt.h"
 #include "csxp/atom.h"
 #include "csxp/env.h"
@@ -81,7 +82,8 @@ static void exit_help(int code)
 
 static void exit_version()
 {
-    fmt::print("csxp {}\n", version_string());
+    fmt::print("csxp {}, libcsxp {}", version_string(),
+            csxp::version_string());
     std::exit(EXIT_SUCCESS);
 }
 
@@ -91,6 +93,9 @@ int main(int argc, char* argv[])
     // todo: maybe implement global level default
     logging::get("env")->level(logging::info);
     logging::get("lib/detail/env")->level(logging::info);
+
+    LOGGER()->debug("csxp {}, libcsxp {}", version_string(),
+            csxp::version_string());
 
     constexpr struct option long_options[] =
             {

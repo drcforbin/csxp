@@ -1,4 +1,4 @@
-project('csxp', ['c', 'cpp'],
+project('csxp', 'cpp',
     version: '1.0.0',
     default_options: [
         'cpp_std=c++17',
@@ -6,24 +6,9 @@ project('csxp', ['c', 'cpp'],
         'b_ndebug=if-release'
     ])
 
-inc = include_directories('include')
+libcsxp_proj = subproject('libcsxp')
+libcsxp_dep = libcsxp_proj.get_variable('libcsxp_dep')
 
-common_sources = files(
-    'src/atom.cpp',
-    'src/env.cpp',
-    'src/fmt/format.cc',
-    'src/fmt/posix.cc',
-    'src/lib/detail-core.cpp',
-    'src/lib/detail-fn.cpp',
-    'src/lib/detail-math.cpp',
-    'src/lib/detail-op.cpp',
-    'src/lib/lib.cpp',
-    'src/logging.cpp',
-    'src/reader.cpp'
-)
-
-
-subdir('bench')
-subdir('src')
-subdir('test')
-
+subdir('csxp')
+subdir('csxp-test')
+subdir('csxp-bench')
