@@ -15,7 +15,7 @@ using namespace std::literals;
 
 namespace csxp {
 
-struct EnvImpl : public Env
+struct EnvImpl final : public Env
 {
 public:
     EnvImpl();

@@ -999,7 +999,7 @@ patom Handler::findAtom()
     return {};
 }
 
-class ReaderImpl : public Reader
+class ReaderImpl final : public Reader
 {
 public:
     ReaderImpl(std::string_view str,
