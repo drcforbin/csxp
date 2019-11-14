@@ -28,7 +28,6 @@ patom identity(Env* env, AtomIterator* args);
 patom take(Env* env, AtomIterator* args);
 patom iterate(Env* env, AtomIterator* args);
 patom reduce(Env* env, AtomIterator* args);
-patom repeat(Env* env, AtomIterator* args);
 patom repeatedly(Env* env, AtomIterator* args);
 
 patom conj(Env* env, AtomIterator* args);

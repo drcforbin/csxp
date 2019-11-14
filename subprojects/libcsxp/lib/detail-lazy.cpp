@@ -203,4 +203,87 @@ patom lazy_seq(csxp::Env* env, AtomIterator* args)
     return LazySeq::make_atom(env, call);
 }
 
+struct RepeatSeq : public Seq
+{
+    // todo: env needs to be shared or passed to next :(
+    RepeatSeq(std::optional<int> count, patom val) :
+        count(count),
+        val(val)
+    {
+    }
+
+    static patom make_atom(std::optional<int> count, patom val)
+    {
+        return std::make_shared<atom>(std::make_shared<RepeatSeq>(count, val));
+    }
+
+    std::shared_ptr<AtomIterator> iterator() const;
+
+    std::optional<int> count;
+    patom val;
+};
+
+struct RepeatSeqIterator : public AtomIterator
+{
+public:
+    RepeatSeqIterator(std::optional<int> count, patom val) :
+        count(count),
+        val(val)
+    {
+    }
+
+    bool next()
+    {
+        if (count) {
+            if (*count > 0) {
+                --*count;
+                return true;
+            } else {
+                val = Nil;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    patom value() const
+    {
+        return val;
+    }
+
+private:
+    std::optional<int> count;
+    patom val;
+};
+
+std::shared_ptr<AtomIterator> RepeatSeq::iterator() const
+{
+    return std::make_shared<RepeatSeqIterator>(count, val);
+}
+
+patom repeat(csxp::Env* env, AtomIterator* args)
+{
+    auto arg = util::arg_next(env, args, 0, "core/repeat"sv);
+    std::shared_ptr<Num> num;
+    //std::shared_ptr<AtomIterator> it;
+
+    if (args->next()) {
+        if (num = get_if<Num>(arg); !num) {
+            throw lib::LibError("expected arg to be num");
+        }
+
+        arg = env->eval(args->value());
+
+        util::check_no_args(args, "core/repeat"sv);
+    }
+
+    std::optional<int> count;
+    if (num) {
+        count = num->val;
+    }
+
+    return RepeatSeq::make_atom(count, arg);
+}
+
 } // namespace csxp::lib::detail::lazy

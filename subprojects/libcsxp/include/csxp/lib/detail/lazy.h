@@ -10,6 +10,7 @@ namespace lib::detail::lazy {
 
 patom cons(Env* env, AtomIterator* args);
 patom lazy_seq(Env* env, AtomIterator* args);
+patom repeat(Env* env, AtomIterator* args);
 
 } // namespace lib::detail::lazy
 } // namespace csxp

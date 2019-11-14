@@ -33,7 +33,6 @@ void addCore(Env* env)
     env->setInternal("take"sv, make_callable(detail::core::take));
     env->setInternal("iterate"sv, make_callable(detail::core::iterate));
     env->setInternal("reduce"sv, make_callable(detail::core::reduce));
-    env->setInternal("repeat"sv, make_callable(detail::core::repeat));
     env->setInternal("repeatedly"sv, make_callable(detail::core::repeatedly));
 
     env->setInternal("conj"sv, make_callable(detail::core::conj));
@@ -44,6 +43,7 @@ void addCore(Env* env)
 
     env->setInternal("cons"sv, make_callable(detail::lazy::cons));
     env->setInternal("lazy-seq"sv, make_callable(detail::lazy::lazy_seq));
+    env->setInternal("repeat"sv, make_callable(detail::lazy::repeat));
 
     env->setInternal("="sv, make_callable(detail::op::eq));
     env->setInternal("not="sv, make_callable(detail::op::neq));

@@ -469,12 +469,6 @@ patom iterate(csxp::Env* env, AtomIterator* args)
     return List::make_atom(std::move(lst));
 }
 
-patom repeat(csxp::Env* env, AtomIterator* args)
-{
-    // todo
-    return Nil;
-}
-
 patom repeatedly(csxp::Env* env, AtomIterator* args)
 {
     // todo

@@ -423,7 +423,30 @@ TEST_CASE("lazy-seq")
 
 TEST_CASE("repeat")
 {
-    // todo
+    testStringsLibError({
+            {"no args", "(repeat)"},
+            {"three args", "(repeat 1 2 3)"},
+            {"non numeric count", "(repeat :2 2)"},
+    });
+
+    testStringsTrue({
+            {"forever", R"-(
+            (= (take 10 (repeat 8)) '(8 8 8 8 8 8 8 8 8 8))
+            )-"},
+            {"forever nil", R"-(
+            (= (take 3 (repeat nil)) '(nil nil nil))
+            )-"},
+            {"counted repeats", R"-(
+            (= (repeat 10 8) '(8 8 8 8 8 8 8 8 8 8))
+            )-"},
+            {"zero count", "(= (repeat 0 2) '())"},
+            {"negative count", "(= (repeat -2 2) '())"},
+            {"multiple call", R"-(
+            (def a (repeat 3 3))
+            (and (= a '(3 3 3))
+                 (= a '(3 3 3)))
+            )-"},
+    });
 }
 
 TEST_CASE("repeatedly")
