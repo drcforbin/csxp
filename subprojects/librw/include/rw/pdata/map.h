@@ -1,10 +1,10 @@
-#ifndef PDATA_MAP_H
-#define PDATA_MAP_H
+#ifndef RW_PDATA_MAP_H
+#define RW_PDATA_MAP_H
 
 #include "fmt/format.h"
-#include "csxp/pdata/map-detail.h"
+#include "rw/pdata/map-detail.h"
 
-namespace pdata {
+namespace rw::pdata {
 
 template <class K, class T>
 class map_base : public std::enable_shared_from_this<map_base<K, T>>
@@ -289,6 +289,6 @@ private:
     std::shared_ptr<node_type> root;
 };
 
-} // namespace pdata
+} // namespace rw::pdata
 
-#endif // PDATA_MAP_H
+#endif // RW_PDATA_MAP_H

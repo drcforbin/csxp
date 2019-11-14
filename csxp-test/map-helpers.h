@@ -2,7 +2,7 @@
 #define CSXP_PDATA_TEST_HELPERS_H
 
 #include "fmt/format.h"
-#include "csxp/pdata/map.h"
+#include "rw/pdata/map.h"
 
 #include <random>
 
@@ -71,8 +71,8 @@ auto randomDupPairs(std::vector<std::pair<IntType, IntType>> pairs)
 }
 
 template <class IntType>
-std::shared_ptr<pdata::persistent_map<IntType, IntType>> fillPersistent(
-        std::shared_ptr<pdata::persistent_map<IntType, IntType>> m,
+std::shared_ptr<rw::pdata::persistent_map<IntType, IntType>> fillPersistent(
+        std::shared_ptr<rw::pdata::persistent_map<IntType, IntType>> m,
         const std::vector<std::pair<IntType, IntType>>& pairs)
 {
     for (auto pair : pairs) {
@@ -82,8 +82,8 @@ std::shared_ptr<pdata::persistent_map<IntType, IntType>> fillPersistent(
 }
 
 template <class IntType>
-std::shared_ptr<pdata::persistent_map<IntType, IntType>> fillTransient(
-        std::shared_ptr<pdata::persistent_map<IntType, IntType>> m,
+std::shared_ptr<rw::pdata::persistent_map<IntType, IntType>> fillTransient(
+        std::shared_ptr<rw::pdata::persistent_map<IntType, IntType>> m,
         const std::vector<std::pair<IntType, IntType>>& pairs)
 {
     auto t = m->transient();
@@ -94,7 +94,7 @@ std::shared_ptr<pdata::persistent_map<IntType, IntType>> fillTransient(
 }
 
 template <class IntType>
-bool check(std::shared_ptr<pdata::persistent_map<IntType, IntType>> m,
+bool check(std::shared_ptr<rw::pdata::persistent_map<IntType, IntType>> m,
         const std::vector<std::pair<IntType, IntType>>& pairs)
 {
     for (auto pair : pairs) {

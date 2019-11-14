@@ -6,6 +6,6 @@ executable(
         '../csxp-test/test-data.cpp',
         'reader.cpp'
     ],
-    dependencies: [libcsxp_dep]
+    dependencies: [librw_dep, libcsxp_dep]
 )
 

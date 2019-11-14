@@ -4,9 +4,9 @@
 #include "csxp/lib/detail/lazy.h"
 #include "csxp/lib/detail/util.h"
 #include "csxp/lib/lib.h"
-#include "csxp/logging.h"
+#include "rw/logging.h"
 
-#define LOGGER() (logging::get("lib/detail/lazy"))
+#define LOGGER() (rw::logging::get("lib/detail/lazy"))
 
 using namespace std::literals;
 

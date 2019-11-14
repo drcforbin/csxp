@@ -12,7 +12,7 @@ testexe = executable(
         'run-helpers.cpp',
         'test-data.cpp'
     ],
-    dependencies: [libcsxp_dep]
+    dependencies: [librw_dep, libcsxp_dep]
 )
 
 test('csxp test', testexe)

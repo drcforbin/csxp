@@ -13,7 +13,7 @@ executable(
         'main.cpp',
         version_file
     ],
-    dependencies: [libcsxp_dep],
+    dependencies: [librw_dep, libcsxp_dep],
     include_directories: inc,
     install: true
 )

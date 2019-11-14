@@ -1,6 +1,6 @@
 #include "map-helpers.h"
 #include "doctest.h"
-#include "csxp/pdata/map.h"
+#include "rw/pdata/map.h"
 
 // todo: rename node_count to something different,
 // and note that it's intended to ease debugging
@@ -15,11 +15,11 @@ TEST_SUITE_BEGIN("persistent-data");
 
 TEST_CASE("bitmap_indexed_node overflows to array node")
 {
-    using base_node = pdata::detail::node<MockHashable, MockHashable, MockHashableHash>;
-    using bin_node = pdata::detail::bitmap_indexed_node<MockHashable, MockHashable, MockHashableHash>;
-    using arr_node = pdata::detail::array_node<MockHashable, MockHashable, MockHashableHash>;
+    using base_node = rw::pdata::detail::node<MockHashable, MockHashable, MockHashableHash>;
+    using bin_node = rw::pdata::detail::bitmap_indexed_node<MockHashable, MockHashable, MockHashableHash>;
+    using arr_node = rw::pdata::detail::array_node<MockHashable, MockHashable, MockHashableHash>;
 
-    std::shared_ptr<base_node> node = std::make_shared<bin_node>(pdata::detail::edit_type{});
+    std::shared_ptr<base_node> node = std::make_shared<bin_node>(rw::pdata::detail::edit_type{});
     // fill 16 items in (0-16)
     for (int i = 0; i < 16; i++) {
         auto a = MockHashable{uint32_t(i), i};
@@ -77,10 +77,10 @@ TEST_CASE("bitmap_indexed_node overflows to array node")
 
 TEST_CASE("bitmap_indexed_node collide")
 {
-    using base_node = pdata::detail::node<MockHashable, MockHashable, MockHashableHash>;
-    using bin_node = pdata::detail::bitmap_indexed_node<MockHashable, MockHashable, MockHashableHash>;
+    using base_node = rw::pdata::detail::node<MockHashable, MockHashable, MockHashableHash>;
+    using bin_node = rw::pdata::detail::bitmap_indexed_node<MockHashable, MockHashable, MockHashableHash>;
 
-    std::shared_ptr<base_node> node = std::make_shared<bin_node>(pdata::detail::edit_type{});
+    std::shared_ptr<base_node> node = std::make_shared<bin_node>(rw::pdata::detail::edit_type{});
 
     // add two different items with same hash value
     auto a = MockHashable{uint32_t(22892882), 3847823};
@@ -131,7 +131,7 @@ TEST_CASE("persistent_map getset")
     {
         for (auto count : counts) {
             auto pairs = randomPairs<uint64_t>(count);
-            auto m = std::make_shared<pdata::persistent_map<uint64_t, uint64_t>>();
+            auto m = std::make_shared<rw::pdata::persistent_map<uint64_t, uint64_t>>();
             m = fillPersistent(m, pairs);
             REQUIRE(check(m, pairs));
         }
@@ -142,7 +142,7 @@ TEST_CASE("persistent_map getset")
         for (auto count : counts) {
             auto pairs = randomPairs<uint64_t>(count);
             auto dupPairs = randomDupPairs(pairs);
-            auto m = std::make_shared<pdata::persistent_map<uint64_t, uint64_t>>();
+            auto m = std::make_shared<rw::pdata::persistent_map<uint64_t, uint64_t>>();
             m = fillPersistent(m, pairs);
             m = fillPersistent(m, dupPairs);
             REQUIRE(check(m, dupPairs));
@@ -158,7 +158,7 @@ TEST_CASE("transient_map getset")
     {
         for (auto count : counts) {
             auto pairs = randomPairs<uint64_t>(count);
-            auto m = std::make_shared<pdata::persistent_map<uint64_t, uint64_t>>();
+            auto m = std::make_shared<rw::pdata::persistent_map<uint64_t, uint64_t>>();
             m = fillTransient(m, pairs);
             REQUIRE(check(m, pairs));
         }
@@ -169,7 +169,7 @@ TEST_CASE("transient_map getset")
         for (auto count : counts) {
             auto pairs = randomPairs<uint64_t>(count);
             auto dupPairs = randomDupPairs(pairs);
-            auto m = std::make_shared<pdata::persistent_map<uint64_t, uint64_t>>();
+            auto m = std::make_shared<rw::pdata::persistent_map<uint64_t, uint64_t>>();
             m = fillTransient(m, pairs);
             m = fillTransient(m, dupPairs);
             REQUIRE(check(m, dupPairs));
@@ -186,7 +186,7 @@ TEST_CASE("persistent_map immutability")
             {3545, 1}};
 
     // start with empty map
-    auto last = std::make_shared<pdata::persistent_map<uint64_t, uint64_t>>();
+    auto last = std::make_shared<rw::pdata::persistent_map<uint64_t, uint64_t>>();
     std::vector<decltype(last)> maps{last};
 
     for (std::size_t i = 0; i < pairs.size(); i++) {
@@ -222,7 +222,7 @@ TEST_CASE("persistent_map dup immutability")
     auto k2 = 10;
 
     // start with empty map, add a couple
-    auto m = std::make_shared<pdata::persistent_map<int, int>>()
+    auto m = std::make_shared<rw::pdata::persistent_map<int, int>>()
                      ->assoc(k1, 99)
                      ->assoc(k2, 108983);
 
@@ -248,7 +248,7 @@ TEST_CASE("persistent_map without")
     auto k2 = 10;
 
     // start with empty map, add a couple
-    auto m = std::make_shared<pdata::persistent_map<int, int>>()
+    auto m = std::make_shared<rw::pdata::persistent_map<int, int>>()
                      ->assoc(k1, 99)
                      ->assoc(k2, 108983)
                      ->assoc(k1, 9387)
@@ -272,7 +272,7 @@ TEST_CASE("transient_map without")
     auto k2 = 10;
 
     // start with empty map, add a couple
-    auto m = std::make_shared<pdata::transient_map<int, int>>()
+    auto m = std::make_shared<rw::pdata::transient_map<int, int>>()
                      ->assoc(k1, 99)
                      ->assoc(k2, 108983)
                      ->assoc(k1, 9387)

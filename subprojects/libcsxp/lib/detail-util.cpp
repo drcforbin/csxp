@@ -1,9 +1,9 @@
 #include "csxp/env.h"
 #include "csxp/lib/detail/util.h"
 #include "csxp/lib/lib.h"
-#include "csxp/logging.h"
+#include "rw/logging.h"
 
-#define LOGGER() (logging::get("lib/detail/util"))
+#define LOGGER() (rw::logging::get("lib/detail/util"))
 
 using namespace std::literals;
 

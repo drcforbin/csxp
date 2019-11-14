@@ -4,11 +4,11 @@
 #include "csxp/lib/detail/fn.h"
 #include "csxp/lib/detail/util.h"
 #include "csxp/lib/lib.h"
-#include "csxp/logging.h"
+#include "rw/logging.h"
 
 #include <map>
 
-#define LOGGER() (logging::get("lib/detail/fn"))
+#define LOGGER() (rw::logging::get("lib/detail/fn"))
 
 using namespace std::literals;
 

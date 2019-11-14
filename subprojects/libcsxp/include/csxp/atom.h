@@ -1,7 +1,7 @@
 #ifndef CSXP_ATOM_H
 #define CSXP_ATOM_H
 
-#include "pdata/map.h"
+#include "rw/pdata/map.h"
 
 namespace csxp {
 
@@ -257,6 +257,7 @@ struct Map : public Seq, std::enable_shared_from_this<Map>
     Map() = default;
     Map(std::vector<std::pair<patom, patom>>& pairs)
     {
+        // todo:
         //for (auto& item : items) {
         //    items->assoc
         //}
@@ -274,8 +275,8 @@ struct Map : public Seq, std::enable_shared_from_this<Map>
 
     std::shared_ptr<AtomIterator> iterator() const;
 
-    std::shared_ptr<pdata::map_base<patom, patom>> items =
-            std::make_shared<pdata::persistent_map<patom, patom>>();
+    std::shared_ptr<rw::pdata::map_base<patom, patom>> items =
+            std::make_shared<rw::pdata::persistent_map<patom, patom>>();
 };
 
 struct Num

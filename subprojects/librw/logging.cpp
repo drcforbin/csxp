@@ -1,5 +1,5 @@
 #include "fmt/time.h"
-#include "csxp/logging.h"
+#include "rw/logging.h"
 
 #include <ctime>
 #include <string_view>
@@ -8,7 +8,7 @@
 using namespace std::literals;
 
 template <>
-struct fmt::formatter<std::shared_ptr<logging::Logger>>
+struct fmt::formatter<std::shared_ptr<rw::logging::Logger>>
 {
     template <typename ParseContext>
     constexpr auto parse(ParseContext& ctx)
@@ -17,7 +17,7 @@ struct fmt::formatter<std::shared_ptr<logging::Logger>>
     }
 
     template <typename FormatContext>
-    auto format(const std::shared_ptr<logging::Logger>& logger, FormatContext& ctx)
+    auto format(const std::shared_ptr<rw::logging::Logger>& logger, FormatContext& ctx)
     {
         if (logger) {
             return format_to(ctx.out(), "logger '{}'", logger->name());
@@ -27,7 +27,7 @@ struct fmt::formatter<std::shared_ptr<logging::Logger>>
     }
 };
 
-static std::unordered_map<std::string, std::shared_ptr<logging::Logger>> g_loggers;
+static std::unordered_map<std::string, std::shared_ptr<rw::logging::Logger>> g_loggers;
 
 constexpr std::array level_names{
         "TRACE"sv,
@@ -38,7 +38,9 @@ constexpr std::array level_names{
         "FATAL"sv,
         "OTHER"sv};
 
-std::shared_ptr<logging::Logger> logging::get(std::string_view name)
+namespace rw::logging {
+
+std::shared_ptr<Logger> get(std::string_view name)
 {
     // todo: allocating a string here feels like a hack
     std::string sname{name};
@@ -52,12 +54,12 @@ std::shared_ptr<logging::Logger> logging::get(std::string_view name)
     }
 }
 
-std::shared_ptr<logging::Logger> logging::dbg()
+std::shared_ptr<Logger>dbg()
 {
     return logging::get("dbg");
 }
 
-void logging::details::log_message(const logging::details::Message& msg)
+void details::log_message(const logging::details::Message& msg)
 {
     auto ts = std::chrono::system_clock::to_time_t(msg.ts);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -67,11 +69,13 @@ void logging::details::log_message(const logging::details::Message& msg)
     std::tm ltm = {0};
     localtime_r(&ts, &ltm);
 
-    int level = msg.level;
-    if (level < logging::trace || logging::off < level)
-        level = logging::off; // OTHER
+    int level = static_cast<int>(msg.level);
+    if (msg.level < log_level::trace || log_level::off < msg.level)
+        level = static_cast<int>(log_level::off); // OTHER
     auto levelstr = level_names[level];
 
     fmt::print("{:%Y-%m-%dT%H:%M:%S}.{:03d} {} {} - {}\n",
             ltm, ms % 1000, levelstr, msg.logname, msg.msg);
 }
+
+} // namespace rw::logging

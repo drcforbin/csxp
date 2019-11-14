@@ -15,6 +15,8 @@ version_file = configure_file(
     }
 )
 
+librw_dep = dependency('librw', fallback: ['librw', 'librw_dep'])
+
 inc = include_directories('include')
 
 libcsxp = shared_library(
@@ -22,8 +24,6 @@ libcsxp = shared_library(
         'csxp.cpp',
         'atom.cpp',
         'env.cpp',
-        'fmt/format.cc',
-        'fmt/posix.cc',
         'lib/detail-core.cpp',
         'lib/detail-env.cpp',
         'lib/detail-fn.cpp',
@@ -32,10 +32,10 @@ libcsxp = shared_library(
         'lib/detail-op.cpp',
         'lib/detail-util.cpp',
         'lib/lib.cpp',
-        'logging.cpp',
         'reader.cpp',
         version_file
     ],
+    dependencies: [librw_dep],
     include_directories : inc,
     install : true
 )

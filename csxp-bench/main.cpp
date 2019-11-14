@@ -1,7 +1,7 @@
 #define ANKERL_NANOBENCH_IMPLEMENT
 #include <nanobench.h>
 
-#include "csxp/logging.h"
+#include "rw/logging.h"
 
 // todo: better way than extern.
 
@@ -12,7 +12,7 @@ extern void bench_reading(ankerl::nanobench::Config& cfg);
 
 int main()
 {
-    logging::get("env")->level(logging::off);
+    rw::logging::get("env")->level(rw::logging::log_level::off);
 
     auto cfg = ankerl::nanobench::Config();
 

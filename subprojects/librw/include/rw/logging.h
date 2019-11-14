@@ -6,11 +6,13 @@
 #include <chrono>
 #include <cstdlib>
 #include <memory>
+#include <stdlib.h>
 #include <string>
+#include <string_view>
 
-namespace logging {
+namespace rw::logging {
 
-enum level_enum
+enum class log_level
 {
     trace = 0,
     debug = 1,
@@ -26,22 +28,22 @@ class Logger
 public:
     Logger(std::string_view name) :
         m_name(name),
-        m_level(logging::trace)
+        m_level(log_level::trace)
     {}
 
-    virtual ~Logger();
+    virtual ~Logger() = default;
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
 
     std::string_view name() const { return m_name; }
 
-    logging::level_enum level() { return m_level; }
-    void level(logging::level_enum val) { m_level = val; }
+    log_level level() { return m_level; }
+    void level(log_level lvl) { m_level = lvl; }
 
     template <typename... Args>
-    void log(level_enum lvl, std::string_view fmt, const Args&... args);
+    void log(log_level lvl, std::string_view fmt, const Args&... args);
     template <typename... Args>
-    void log(level_enum lvl, std::string_view msg);
+    void log(log_level lvl, std::string_view msg);
     template <typename Arg1, typename... Args>
     void trace(std::string_view fmt, const Arg1&, const Args&... args);
     template <typename Arg1, typename... Args>
@@ -56,7 +58,7 @@ public:
     void fatal(std::string_view fmt, const Arg1&, const Args&... args);
 
     template <typename T>
-    void log(level_enum lvl, const T&);
+    void log(log_level lvl, const T&);
     template <typename T>
     void trace(const T&);
     template <typename T>
@@ -72,7 +74,7 @@ public:
 
 private:
     const std::string m_name;
-    logging::level_enum m_level;
+    log_level m_level;
 };
 
 // get/create a logger
@@ -85,7 +87,7 @@ namespace details {
 struct Message
 {
     Message() = default;
-    Message(std::string_view logname, logging::level_enum lvl) :
+    Message(std::string_view logname, log_level lvl) :
         logname(logname),
         level(lvl),
         ts(std::chrono::system_clock::now())
@@ -96,7 +98,7 @@ struct Message
     Message(Message&& other) = delete;
 
     std::string_view logname;
-    logging::level_enum level = logging::trace;
+    log_level level = log_level::trace;
     std::chrono::system_clock::time_point ts;
 
     std::string msg;
@@ -105,14 +107,11 @@ struct Message
 void log_message(const Message& msg);
 
 } // namespace details
-} // namespace logging
 
 // impl bits:
 
-inline logging::Logger::~Logger() = default;
-
 template <typename... Args>
-inline void logging::Logger::log(logging::level_enum lvl, std::string_view fmt, const Args&... args)
+inline void Logger::log(log_level lvl, std::string_view fmt, const Args&... args)
 {
     if (lvl < m_level)
         return;
@@ -121,12 +120,12 @@ inline void logging::Logger::log(logging::level_enum lvl, std::string_view fmt, 
     message.msg = fmt::format(fmt, args...);
     details::log_message(message);
 
-    if (lvl == logging::fatal)
-        std::exit(1);
+    if (lvl == log_level::fatal)
+        std::exit(EXIT_FAILURE);
 }
 
 template <typename... Args>
-inline void logging::Logger::log(logging::level_enum lvl, std::string_view msg)
+inline void Logger::log(log_level lvl, std::string_view msg)
 {
     if (lvl < m_level)
         return;
@@ -135,12 +134,12 @@ inline void logging::Logger::log(logging::level_enum lvl, std::string_view msg)
     message.msg = msg;
     details::log_message(message);
 
-    if (lvl == logging::fatal)
-        std::exit(1);
+    if (lvl == log_level::fatal)
+        std::exit(EXIT_FAILURE);
 }
 
 template <typename T>
-inline void logging::Logger::log(logging::level_enum lvl, const T& msg)
+inline void Logger::log(log_level lvl, const T& msg)
 {
     if (lvl < m_level)
         return;
@@ -149,80 +148,82 @@ inline void logging::Logger::log(logging::level_enum lvl, const T& msg)
     message.msg = fmt::format(msg);
     details::log_message(message);
 
-    if (lvl == logging::fatal)
-        std::exit(1);
+    if (lvl == log_level::fatal)
+        std::exit(EXIT_FAILURE);
 }
 
 template <typename Arg1, typename... Args>
-inline void logging::Logger::trace(std::string_view fmt, const Arg1& arg1, const Args&... args)
+inline void Logger::trace(std::string_view fmt, const Arg1& arg1, const Args&... args)
 {
-    log(logging::trace, fmt, arg1, args...);
+    log(log_level::trace, fmt, arg1, args...);
 }
 
 template <typename Arg1, typename... Args>
-inline void logging::Logger::debug(std::string_view fmt, const Arg1& arg1, const Args&... args)
+inline void Logger::debug(std::string_view fmt, const Arg1& arg1, const Args&... args)
 {
-    log(logging::debug, fmt, arg1, args...);
+    log(log_level::debug, fmt, arg1, args...);
 }
 
 template <typename Arg1, typename... Args>
-inline void logging::Logger::info(std::string_view fmt, const Arg1& arg1, const Args&... args)
+inline void Logger::info(std::string_view fmt, const Arg1& arg1, const Args&... args)
 {
-    log(logging::info, fmt, arg1, args...);
+    log(log_level::info, fmt, arg1, args...);
 }
 
 template <typename Arg1, typename... Args>
-inline void logging::Logger::warn(std::string_view fmt, const Arg1& arg1, const Args&... args)
+inline void Logger::warn(std::string_view fmt, const Arg1& arg1, const Args&... args)
 {
-    log(logging::warn, fmt, arg1, args...);
+    log(log_level::warn, fmt, arg1, args...);
 }
 
 template <typename Arg1, typename... Args>
-inline void logging::Logger::error(std::string_view fmt, const Arg1& arg1, const Args&... args)
+inline void Logger::error(std::string_view fmt, const Arg1& arg1, const Args&... args)
 {
-    log(logging::err, fmt, arg1, args...);
+    log(log_level::err, fmt, arg1, args...);
 }
 
 template <typename Arg1, typename... Args>
-inline void logging::Logger::fatal(std::string_view fmt, const Arg1& arg1, const Args&... args)
+inline void Logger::fatal(std::string_view fmt, const Arg1& arg1, const Args&... args)
 {
-    log(logging::fatal, fmt, arg1, args...);
+    log(log_level::fatal, fmt, arg1, args...);
 }
 
 template <typename T>
-inline void logging::Logger::trace(const T& msg)
+inline void Logger::trace(const T& msg)
 {
-    log(logging::trace, msg);
+    log(log_level::trace, msg);
 }
 
 template <typename T>
-inline void logging::Logger::debug(const T& msg)
+inline void Logger::debug(const T& msg)
 {
-    log(logging::debug, msg);
+    log(log_level::debug, msg);
 }
 
 template <typename T>
-inline void logging::Logger::info(const T& msg)
+inline void Logger::info(const T& msg)
 {
-    log(logging::info, msg);
+    log(log_level::info, msg);
 }
 
 template <typename T>
-inline void logging::Logger::warn(const T& msg)
+inline void Logger::warn(const T& msg)
 {
-    log(logging::warn, msg);
+    log(log_level::warn, msg);
 }
 
 template <typename T>
-inline void logging::Logger::error(const T& msg)
+inline void Logger::error(const T& msg)
 {
-    log(logging::err, msg);
+    log(log_level::err, msg);
 }
 
 template <typename T>
-inline void logging::Logger::fatal(const T& msg)
+inline void Logger::fatal(const T& msg)
 {
-    log(logging::fatal, msg);
+    log(log_level::fatal, msg);
 }
+
+} // namespace rw::logging
 
 #endif // CSXP_LOGGING_H

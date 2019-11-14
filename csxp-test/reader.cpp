@@ -3,7 +3,7 @@
 
 // todo: remove
 #include "csxp/atom_fmt.h"
-#include "csxp/logging.h"
+#include "rw/logging.h"
 
 #include <string_view>
 
@@ -14,7 +14,7 @@ extern const std::string_view arbitrary_long_clj;
 
 using namespace std::literals;
 
-csxp::patom testReadToAtom(std::string_view str)
+static csxp::patom testReadToAtom(std::string_view str)
 {
     // todo: switch to 'reader'?
 
@@ -31,7 +31,7 @@ csxp::patom testReadToAtom(std::string_view str)
     return val;
 }
 
-std::vector<csxp::patom> testReadToAtoms(std::string_view str)
+static std::vector<csxp::patom> testReadToAtoms(std::string_view str)
 {
     std::vector<csxp::patom> vec;
     for (auto val : csxp::reader(str, "test-file"sv)) {

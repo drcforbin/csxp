@@ -2,10 +2,10 @@
 #include "csxp/atom_fmt.h"
 #include "csxp/atom.h"
 #include "csxp/env.h"
-#include "fmt/format.h"
 #include "csxp/lib/lib.h"
-#include "csxp/logging.h"
 #include "csxp/reader.h"
+#include "fmt/format.h"
+#include "rw/logging.h"
 #include "version.h"
 
 #include <cstdlib>
@@ -16,7 +16,7 @@
 // todo: add stuff or delete
 #include "csxp/csxp.h"
 
-#define LOGGER() (logging::get("csxp-main"))
+#define LOGGER() (rw::logging::get("csxp-main"))
 
 using namespace std::literals;
 
@@ -91,8 +91,8 @@ int main(int argc, char* argv[])
 {
     // todo: review these
     // todo: maybe implement global level default
-    logging::get("env")->level(logging::info);
-    logging::get("lib/detail/env")->level(logging::info);
+    rw::logging::get("env")->level(rw::logging::log_level::info);
+    rw::logging::get("lib/detail/env")->level(rw::logging::log_level::info);
 
     LOGGER()->debug("csxp {}, libcsxp {}", version_string(),
             csxp::version_string());

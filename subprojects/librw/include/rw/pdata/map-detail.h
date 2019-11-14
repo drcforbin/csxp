@@ -1,12 +1,12 @@
-#ifndef PDATA_MAP_DETAIL_H
-#define PDATA_MAP_DETAIL_H
+#ifndef RW_PDATA_MAP_DETAIL_H
+#define RW_PDATA_MAP_DETAIL_H
 
 #include "fmt/format.h"
 
 #include <thread>
 #include <variant>
 
-namespace pdata::detail {
+namespace rw::pdata::detail {
 
 using edit_type = std::weak_ptr<std::thread::id>;
 using hash_type = std::size_t;
@@ -878,6 +878,6 @@ private:
     array_type array;
 };
 
-} // namespace pdata::detail
+} // namespace rw::pdata::detail
 
-#endif // PDATA_MAP_DETAIL_H
+#endif // RW_PDATA_MAP_DETAIL_H

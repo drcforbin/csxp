@@ -1,6 +1,6 @@
 #include "csxp/env.h"
 #include "csxp/atom_fmt.h"
-#include "csxp/logging.h"
+#include "rw/logging.h"
 #include "fmt/format.h"
 
 #include <deque>
@@ -9,7 +9,7 @@
 // todo: compare map vs unordered_map perf
 #include <unordered_map>
 
-#define LOGGER() (logging::get("env"))
+#define LOGGER() (rw::logging::get("env"))
 
 using namespace std::literals;
 
