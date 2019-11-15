@@ -44,3 +44,34 @@ libcsxp_dep = declare_dependency(
     include_directories : inc,
     link_with : libcsxp
 )
+
+executable(
+    'libcsxp-bench', [
+        'bench/main.cpp',
+        'bench/integration.cpp',
+        'bench/reader.cpp',
+        'test/test-data.cpp'
+    ],
+    dependencies: [librw_dep, libcsxp_dep],
+    include_directories : inc
+)
+
+testexe = executable(
+    'libcsxp-test', [
+        'test/env.cpp',
+        'test/integration.cpp',
+        'test/lib-core.cpp',
+        'test/lib-fn.cpp',
+        'test/lib-math.cpp',
+        'test/lib-op.cpp',
+        'test/main.cpp',
+        'test/reader.cpp',
+        'test/run-helpers.cpp',
+        'test/test-data.cpp'
+    ],
+    dependencies: [librw_dep, libcsxp_dep],
+    include_directories : inc
+)
+
+test('libcsxp test', testexe)
+

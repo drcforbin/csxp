@@ -1,8 +1,7 @@
 #include "csxp/env.h"
 #include "csxp/lib/lib.h"
 #include "csxp/reader.h"
-
-#include <nanobench.h>
+#include "nanobench.h"
 
 using namespace std::literals;
 

@@ -1,6 +1,5 @@
 #include "csxp/reader.h"
-
-#include <nanobench.h>
+#include "nanobench.h"
 
 extern const std::string_view arbitrary_clj;
 extern const std::string_view arbitrary_long_clj;

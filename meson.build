@@ -13,5 +13,3 @@ librw_proj = subproject('librw')
 librw_dep = libcsxp_proj.get_variable('librw_dep')
 
 subdir('csxp')
-subdir('csxp-test')
-subdir('csxp-bench')
