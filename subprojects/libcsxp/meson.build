@@ -19,7 +19,7 @@ librw_dep = dependency('librw', fallback: ['librw', 'librw_dep'])
 
 inc = include_directories('include')
 
-libcsxp = shared_library(
+libcsxp = static_library(
     'csxp', [
         'csxp.cpp',
         'atom.cpp',
