@@ -6,10 +6,10 @@ project('csxp', 'cpp',
         'b_ndebug=if-release'
     ])
 
-libcsxp_proj = subproject('libcsxp')
-libcsxp_dep = libcsxp_proj.get_variable('libcsxp_dep')
-
 librw_proj = subproject('librw')
-librw_dep = libcsxp_proj.get_variable('librw_dep')
+librw_dep = librw_proj.get_variable('librw_dep')
 
+libcsxp_inc = include_directories('include')
+
+subdir('libcsxp')
 subdir('csxp')

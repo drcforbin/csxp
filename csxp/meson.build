@@ -1,19 +1,9 @@
-version_file = configure_file(
-    input: 'version.cpp.in',
-    output: 'version.cpp',
-    configuration: {
-      'version': meson.project_version()
-    }
-)
-
-inc = include_directories('include')
-
 executable(
     'csxp', [
-        'main.cpp',
-        version_file
+        'main.cpp'
     ],
-    dependencies: [librw_dep, libcsxp_dep],
-    include_directories: inc,
+    dependencies: [librw_dep],
+    link_with: [libcsxp],
+    include_directories: [libcsxp_inc],
     install: true
 )

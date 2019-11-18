@@ -1,8 +1,0 @@
-#include "version.h"
-
-using namespace std::literals;
-
-std::string_view version_string()
-{
-    return "@version@"sv;
-}

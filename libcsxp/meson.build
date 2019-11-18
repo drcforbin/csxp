@@ -1,12 +1,3 @@
-project('libcsxp', 'cpp',
-    version: '1.0.0',
-    default_options: [
-        'cpp_std=c++17',
-        'b_lto=true',
-        'b_ndebug=if-release'
-    ]
-)
-
 version_file = configure_file(
     input: 'version.cpp.in',
     output: 'version.cpp',
@@ -16,8 +7,6 @@ version_file = configure_file(
 )
 
 librw_dep = dependency('librw', fallback: ['librw', 'librw_dep'])
-
-inc = include_directories('include')
 
 libcsxp = static_library(
     'csxp', [
@@ -36,12 +25,12 @@ libcsxp = static_library(
         version_file
     ],
     dependencies: [librw_dep],
-    include_directories : inc,
+    include_directories : [libcsxp_inc],
     install : true
 )
 
 libcsxp_dep = declare_dependency(
-    include_directories : inc,
+    include_directories : libcsxp_inc,
     link_with : libcsxp
 )
 
@@ -53,7 +42,7 @@ executable(
         'test/test-data.cpp'
     ],
     dependencies: [librw_dep, libcsxp_dep],
-    include_directories : inc
+    include_directories : [libcsxp_inc],
 )
 
 testexe = executable(
@@ -70,7 +59,7 @@ testexe = executable(
         'test/test-data.cpp'
     ],
     dependencies: [librw_dep, libcsxp_dep],
-    include_directories : inc
+    include_directories : [libcsxp_inc],
 )
 
 test('libcsxp test', testexe)

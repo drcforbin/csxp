@@ -1,20 +1,13 @@
 #include "csxp/csxp.h"
 #include "csxp/atom_fmt.h"
-#include "csxp/atom.h"
-#include "csxp/env.h"
-#include "csxp/lib/lib.h"
-#include "csxp/reader.h"
 #include "fmt/format.h"
+#include "rw/argparse.h"
 #include "rw/logging.h"
-#include "version.h"
 
 #include <cstdlib>
 #include <fstream>
 #include <getopt.h>
 #include <streambuf>
-
-// todo: add stuff or delete
-#include "csxp/csxp.h"
 
 #define LOGGER() (rw::logging::get("csxp-main"))
 
@@ -70,21 +63,32 @@ void dump(csxp::patom a, int indent = 0)
             a->p);
 }
 
-static void exit_help(int code)
-{
-    fmt::print((code == EXIT_SUCCESS) ? stdout : stderr,
-            "Usage: csxp [options] [-- args]\n"
-            "  -e, --exec FILE       run specific file\n"
-            "  -h, --help            show help\n"
-            "  -v, --version         show version and exit\n");
-    std::exit(code);
-}
+auto usage = R"(
+Usage: csxp [options] [-- args]
+  -e, --exec FILE       run specific file
+  -h, --help            show help
+  -v, --version         show version and exit
+)"sv;
 
 static void exit_version()
 {
-    fmt::print("csxp {}, libcsxp {}", version_string(),
-            csxp::version_string());
+    fmt::print("csxp {}", csxp::version_string());
     std::exit(EXIT_SUCCESS);
+}
+
+static std::optional<std::string> read_file(std::string_view path) {
+    // ugh. why not take a string_view
+    // todo: look at how to best do this...
+    std::ifstream in(std::string(path), std::ios::in | std::ios::binary);
+    if (in) {
+        std::string str;
+        in.seekg(0, std::ios::end);
+        str.resize(in.tellg());
+        in.seekg(0, std::ios::beg);
+        in.read(str.data(), str.size());
+        in.close();
+    }
+    return std::nullopt;
 }
 
 int main(int argc, char* argv[])
@@ -94,87 +98,51 @@ int main(int argc, char* argv[])
     rw::logging::get("env")->level(rw::logging::log_level::info);
     rw::logging::get("lib/detail/env")->level(rw::logging::log_level::info);
 
-    LOGGER()->debug("csxp {}, libcsxp {}", version_string(),
-            csxp::version_string());
+    LOGGER()->debug("csxp {}", csxp::version_string());
 
-    constexpr struct option long_options[] =
-            {
-                    {"exec", required_argument, nullptr, 'e'},
-                    {"test", required_argument, nullptr, 't'},
-                    {"help", no_argument, nullptr, 'h'},
-                    {"version", no_argument, nullptr, 'v'},
-                    {nullptr, 0, nullptr, 0}};
+    std::string_view exec_path;
+    bool show_version = false;
+    bool run_tests = false;
 
-    const char* optargstr = "-e:t:hv";
-
-    const char* test_path = nullptr;
-    const char* exe_path = nullptr;
-
-    int opt;
-    while ((opt = getopt_long(argc, argv, optargstr,
-                    long_options, nullptr)) != -1) {
-        switch (opt) {
-            case 'e':
-                LOGGER()->info("exec: {}", optarg);
-                exe_path = optarg;
-                break;
-            case 't':
-                LOGGER()->info("test: {}", optarg);
-                test_path = optarg;
-                break;
-            case 'h':
-                exit_help(EXIT_SUCCESS);
-                break;
-            case 'v':
-                exit_version();
-                break;
-            case 1:
-                fmt::print(stderr, "{}: invalid arg -- '{}'\n",
-                        argv[0], argv[optind - 1]);
-                [[fallthrough]];
-            default:
-                exit_help(EXIT_FAILURE);
-        }
+    // todo: move NoOpts to argparse ns
+    struct NoOpts {};
+    auto p = rw::argparse::parser<NoOpts>{};
+    p.one_of(false)
+        .optional(&exec_path, "exec"sv, "e"sv)
+        .optional(&run_tests, "test"sv)
+        .optional(&show_version, "version"sv, "v"sv);
+    p.usage(usage);
+    auto o = p.parse(argc, argv);
+    if (!o) {
+        return EXIT_FAILURE;
     }
 
-    if (optind < argc) {
-        LOGGER()->info("non-option args:");
-        for (; optind < argc; optind++) {
-            LOGGER()->info("{}", argv[optind]);
-
-            // capture args with we had -e
-            if (exe_path) {
-                // todo: options.cmd.push_back(argv[optind]);
-            }
-        }
+    if (show_version) {
+        exit_version();
     }
 
-    if (exe_path && test_path) {
-        fmt::print(stderr, "{}: cannot specify exec and test\n", argv[0]);
-    }
-
-    if (exe_path) {
-        std::ifstream in(exe_path, std::ios::in | std::ios::binary);
-        if (in) {
-            std::string str;
-            in.seekg(0, std::ios::end);
-            str.resize(in.tellg());
-            in.seekg(0, std::ios::beg);
-            in.read(str.data(), str.size());
-            in.close();
-
+    if (!exec_path.empty()) {
+        LOGGER()->info("exec: {}", exec_path);
+        if (auto str = read_file(exec_path)) {
             try {
-                // set up basic env
-                auto env = csxp::createEnv();
-                csxp::lib::addCore(env.get());
-                csxp::lib::addEnv(env.get());
-                csxp::lib::addMath(env.get());
-                // todo: implement some kinda search path
-                csxp::lib::addLib(env.get(), "../csxp-lib.clj"sv);
+                if (run_tests) {
+                    // set up basic env
+                    auto env = csxp::createEnv();
+                    csxp::lib::addCore(env.get());
+                    csxp::lib::addEnv(env.get());
+                    csxp::lib::addMath(env.get());
+                    // todo: implement some kinda search path
+                    csxp::lib::addLib(env.get(), "../csxp-lib.clj"sv);
 
-                csxp::patom res = csxp::Nil;
-                for (auto val : csxp::reader(str, exe_path)) {
-                    res = env->eval(val);
+                    csxp::patom res = csxp::Nil;
+                    for (auto val : csxp::reader(*str, exec_path)) {
+                        res = env->eval(val);
+                    }
+                } else {
+                    for (auto val : csxp::reader(*str, exec_path)) {
+                        fmt::print("{}\n", *val);
+                        dump(val);
+                    }
                 }
             } catch (const csxp::EnvError& e) {
                 LOGGER()->error("env error: {}", e.what());
@@ -184,39 +152,7 @@ int main(int argc, char* argv[])
                 LOGGER()->error("unknown error: {}", e.what());
             }
         } else {
-            LOGGER()->error("unable to open input file '{}'", exe_path);
-        }
-    }
-
-    if (test_path) {
-        std::ifstream in(test_path, std::ios::in | std::ios::binary);
-        if (in) {
-            std::string str;
-            in.seekg(0, std::ios::end);
-            str.resize(in.tellg());
-            in.seekg(0, std::ios::beg);
-            in.read(str.data(), str.size());
-            in.close();
-
-            try {
-                // set up basic env
-                //auto env = csxp::createEnv();
-                //lib::addCore(env.get());
-                //lib::addMath(env.get());
-
-                for (auto val : csxp::reader(str, exe_path)) {
-                    fmt::print("{}\n", *val);
-                    dump(val);
-                }
-            } catch (const csxp::EnvError& e) {
-                LOGGER()->error("env error: {}", e.what());
-            } catch (const csxp::ReaderError& e) {
-                LOGGER()->error("reader error: {}", e.what());
-            } catch (const std::runtime_error& e) {
-                LOGGER()->error("unknown error: {}", e.what());
-            }
-        } else {
-            LOGGER()->error("unable to open input file '{}'", exe_path);
+            LOGGER()->error("unable to read input file '{}'", exec_path);
         }
     }
 
