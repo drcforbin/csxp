@@ -344,25 +344,20 @@ struct Handler
                 m_pos.line++;
                 [[fallthrough]];
             case '\r':
-                [[fallthrough]];
             case ' ':
-                [[fallthrough]];
             case '\f':
-                [[fallthrough]];
             case '\t':
-                [[fallthrough]];
             case '\v':
-                [[fallthrough]];
             // todo: unicode support
-            // case 0x00a0: [[fallthrough]];
-            // case 0x1680: [[fallthrough]];
-            // case 0x2000 ... 0x200a: [[fallthrough]];
-            // case 0x2028: [[fallthrough]];
-            // case 0x2029: [[fallthrough]];
-            // case 0x202f: [[fallthrough]];
-            // case 0x205f: [[fallthrough]];
-            // case 0x3000: [[fallthrough]];
-            // case 0xfeff: [[fallthrough]];
+            // case 0x00a0:
+            // case 0x1680:
+            // case 0x2000 ... 0x200a:
+            // case 0x2028:
+            // case 0x2029:
+            // case 0x202f:
+            // case 0x205f:
+            // case 0x3000:
+            // case 0xfeff:
             case ',':
                 // whitespace. emit anything we've accumulated
                 // and just ignore this char
@@ -422,7 +417,6 @@ struct Handler
                 }
                 [[fallthrough]];
             case '^':
-                [[fallthrough]];
             case '@':
                 // todo: @form -> (deref form)
                 [[fallthrough]];
