@@ -104,9 +104,7 @@ int main(int argc, char* argv[])
     bool show_version = false;
     bool run_tests = false;
 
-    // todo: move NoOpts to argparse ns
-    struct NoOpts {};
-    auto p = rw::argparse::parser<NoOpts>{};
+    auto p = rw::argparse::parser{};
     p.one_of(false)
         .optional(&exec_path, "exec"sv, "e"sv)
         .optional(&run_tests, "test"sv)
